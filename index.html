@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Repartos - Tiempo Real</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            backdrop-filter: blur(10px);
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .status-indicator {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #4CAF50;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .form-section {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 600;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            background: white;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .button-group {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-top: 25px;
+        }
+
+        button {
+            flex: 1;
+            min-width: 150px;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+        }
+
+        .btn-success:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(17, 153, 142, 0.3);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+            color: white;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(235, 51, 73, 0.3);
+        }
+
+        .table-container {
+            overflow-x: auto;
+            margin-top: 30px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+
+        th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 14px;
+        }
+
+        td {
+            padding: 15px;
+            border-bottom: 1px solid #e0e0e0;
+            color: #333;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+            transition: background 0.3s ease;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+            font-size: 18px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #667eea;
+        }
+
+        .new-item {
+            animation: slideInLeft 0.5s ease;
+        }
+
+        @keyframes slideInLeft {
+            from {
+                transform: translateX(-20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 2em;
+            }
+
+            .button-group {
+                flex-direction: column;
+            }
+
+            button {
+                width: 100%;
+            }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .sync-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px 20px;
+            border-radius: 20px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            display: none;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+            color: #667eea;
+            z-index: 1000;
+        }
+
+        .sync-indicator.active {
+            display: flex;
+        }
+
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid #667eea;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="sync-indicator" id="syncIndicator">
+        <div class="spinner"></div>
+        <span>Sincronizando...</span>
+    </div>
+
+    <div class="container">
+        <h1>📦 Gestión de Repartos - Tiempo Real</h1>
+        
+        <div class="status-indicator">
+            <div class="status-dot"></div>
+            <span>Conectado y sincronizando en tiempo real</span>
+        </div>
+
+        <div class="form-section">
+            <form id="repartoForm">
+                <div class="form-group">
+                    <label for="destino">Destino</label>
+                    <input type="text" id="destino" required placeholder="Ej: Cliente ABC">
+                </div>
+                
+                <div class="form-group">
+                    <label for="direccion">Dirección</label>
+                    <input type="text" id="direccion" required placeholder="Ej: Av. Principal 123">
+                </div>
+                
+                <div class="form-group">
+                    <label for="horarios">Horarios de Entrega</label>
+                    <input type="text" id="horarios" required placeholder="Ej: 9:00 - 18:00">
+                </div>
+                
+                <div class="form-group">
+                    <label for="bultos">Cantidad de Bultos</label>
+                    <input type="number" id="bultos" required min="1" placeholder="Ej: 5">
+                </div>
+                
+                <div class="button-group">
+                    <button type="submit" class="btn-primary" id="btnAgregar">Agregar Reparto</button>
+                    <button type="button" class="btn-success" onclick="exportarExcel()">📊 Exportar Excel</button>
+                    <button type="button" class="btn-danger" onclick="vaciarRepartos()">🗑️ Vaciar Todo</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="table-container">
+            <table id="repartosTable">
+                <thead>
+                    <tr>
+                        <th>N°</th>
+                        <th>Destino</th>
+                        <th>Dirección</th>
+                        <th>Horarios de Entrega</th>
+                        <th>Cantidad de Bultos</th>
+                        <th>Agregado por</th>
+                    </tr>
+                </thead>
+                <tbody id="repartosBody">
+                    <tr>
+                        <td colspan="6" class="loading">Cargando repartos...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // Configuración de Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyBFYVCzQ9u0ptOOW9_ZrTsk6zj8IIV4wjc",
+            authDomain: "gestion-repartos.firebaseapp.com",
+            databaseURL: "https://gestion-repartos-default-rtdb.firebaseio.com",
+            projectId: "gestion-repartos",
+            storageBucket: "gestion-repartos.firebasestorage.app",
+            messagingSenderId: "864658212059",
+            appId: "1:864658212059:web:75d08dff685b88313078fe"
+        };
+
+        // Inicializar Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        const repartosRef = database.ref('repartos');
+
+        let repartos = [];
+        let ultimoNumero = 0;
+        let deviceId = localStorage.getItem('deviceId') || generateDeviceId();
+
+        function generateDeviceId() {
+            const id = 'device_' + Math.random().toString(36).substr(2, 9);
+            localStorage.setItem('deviceId', id);
+            return id;
+        }
+
+        // Escuchar cambios en tiempo real
+        repartosRef.on('value', (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                repartos = Object.keys(data).map(key => ({
+                    id: key,
+                    ...data[key]
+                }));
+                // Ordenar por número
+                repartos.sort((a, b) => a.numero - b.numero);
+                ultimoNumero = Math.max(...repartos.map(r => r.numero), 0);
+            } else {
+                repartos = [];
+                ultimoNumero = 0;
+            }
+            actualizarTabla();
+            ocultarIndicadorSync();
+        });
+
+        // Manejar el formulario
+        document.getElementById('repartoForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const btnAgregar = document.getElementById('btnAgregar');
+            btnAgregar.disabled = true;
+            mostrarIndicadorSync();
+            
+            try {
+                // Obtener el último número actualizado
+                const snapshot = await repartosRef.once('value');
+                const data = snapshot.val();
+                if (data) {
+                    const numeros = Object.values(data).map(r => r.numero);
+                    ultimoNumero = Math.max(...numeros, 0);
+                }
+                
+                const nuevoReparto = {
+                    numero: ultimoNumero + 1,
+                    destino: document.getElementById('destino').value,
+                    direccion: document.getElementById('direccion').value,
+                    horarios: document.getElementById('horarios').value,
+                    bultos: parseInt(document.getElementById('bultos').value),
+                    agregadoPor: deviceId,
+                    timestamp: firebase.database.ServerValue.TIMESTAMP
+                };
+                
+                // Agregar a Firebase
+                await repartosRef.push(nuevoReparto);
+                
+                // Limpiar formulario
+                this.reset();
+                document.getElementById('destino').focus();
+                
+                mostrarNotificacion('Reparto agregado correctamente');
+            } catch (error) {
+                console.error('Error al agregar reparto:', error);
+                mostrarNotificacion('Error al agregar reparto', 'error');
+            } finally {
+                btnAgregar.disabled = false;
+                ocultarIndicadorSync();
+            }
+        });
+
+        function actualizarTabla() {
+            const tbody = document.getElementById('repartosBody');
+            
+            if (repartos.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No hay repartos cargados aún</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = repartos.map((reparto, index) => `
+                <tr class="${index === repartos.length - 1 ? 'new-item' : ''}">
+                    <td>${reparto.numero}</td>
+                    <td>${reparto.destino}</td>
+                    <td>${reparto.direccion}</td>
+                    <td>${reparto.horarios}</td>
+                    <td>${reparto.bultos}</td>
+                    <td>${reparto.agregadoPor === deviceId ? 'Este dispositivo' : 'Otro dispositivo'}</td>
+                </tr>
+            `).join('');
+        }
+
+        function exportarExcel() {
+            if (repartos.length === 0) {
+                alert('No hay repartos para exportar');
+                return;
+            }
+            
+            // Crear libro de Excel
+            const datosExcel = repartos.map(r => ({
+                'N°': r.numero,
+                'Destino': r.destino,
+                'Dirección': r.direccion,
+                'Horarios de Entrega': r.horarios,
+                'Cantidad de Bultos': r.bultos,
+                'Agregado por': r.agregadoPor === deviceId ? 'Este dispositivo' : 'Otro dispositivo'
+            }));
+            
+            const ws = XLSX.utils.json_to_sheet(datosExcel);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Repartos");
+            
+            // Descargar archivo
+            const fecha = new Date().toLocaleDateString('es-ES').replace(/\//g, '-');
+            XLSX.writeFile(wb, `repartos_${fecha}.xlsx`);
+            
+            mostrarNotificacion('Excel exportado correctamente');
+        }
+
+        async function vaciarRepartos() {
+            if (repartos.length === 0) {
+                alert('No hay repartos para vaciar');
+                return;
+            }
+            
+            if (confirm('¿Estás seguro de que deseas vaciar TODOS los repartos? Esta acción afectará a todos los dispositivos conectados.')) {
+                mostrarIndicadorSync();
+                try {
+                    await repartosRef.remove();
+                    mostrarNotificacion('Todos los repartos han sido eliminados');
+                } catch (error) {
+                    console.error('Error al vaciar repartos:', error);
+                    mostrarNotificacion('Error al vaciar repartos', 'error');
+                } finally {
+                    ocultarIndicadorSync();
+                }
+            }
+        }
+
+        function mostrarIndicadorSync() {
+            document.getElementById('syncIndicator').classList.add('active');
+        }
+
+        function ocultarIndicadorSync() {
+            setTimeout(() => {
+                document.getElementById('syncIndicator').classList.remove('active');
+            }, 500);
+        }
+
+        function mostrarNotificacion(mensaje, tipo = 'success') {
+            const notif = document.createElement('div');
+            notif.textContent = mensaje;
+            const bgColor = tipo === 'error' 
+                ? 'linear-gradient(135deg, #eb3349 0%, #f45c43 100%)' 
+                : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+            
+            notif.style.cssText = `
+                position: fixed;
+                top: 20px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: ${bgColor};
+                color: white;
+                padding: 15px 25px;
+                border-radius: 8px;
+                box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+                z-index: 2000;
+                animation: slideDown 0.5s ease;
+            `;
+            
+            document.body.appendChild(notif);
+            
+            setTimeout(() => {
+                notif.style.animation = 'slideUp 0.5s ease';
+                setTimeout(() => notif.remove(), 500);
+            }, 3000);
+        }
+
+        // Animaciones CSS adicionales
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideDown {
+                from {
+                    transform: translate(-50%, -100%);
+                    opacity: 0;
+                }
+                to {
+                    transform: translate(-50%, 0);
+                    opacity: 1;
+                }
+            }
+            
+            @keyframes slideUp {
+                from {
+                    transform: translate(-50%, 0);
+                    opacity: 1;
+                }
+                to {
+                    transform: translate(-50%, -100%);
+                    opacity: 0;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Manejar errores de conexión
+        database.ref('.info/connected').on('value', (snapshot) => {
+            if (snapshot.val() === false) {
+                mostrarNotificacion('Conexión perdida. Los cambios se sincronizarán cuando se restablezca.', 'error');
+            }
+        });
+    </script>
+</body>
+</html>
