@@ -1,0 +1,29 @@
+# Dependencias
+# Esta carpeta se regenera ejecutando `npm install`
+node_modules/
+
+# Archivos de entorno
+# ¡NUNCA subas estos archivos a un repositorio público!
+# Contienen tus claves secretas y credenciales.
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Carpeta de producción
+# Se genera al ejecutar `npm run build`
+build/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
+
+# Otros
+coverage/
