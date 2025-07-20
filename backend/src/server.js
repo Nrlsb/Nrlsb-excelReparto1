@@ -10,8 +10,8 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // --- Configuración de CORS ---
-// RECUERDA REEMPLAZAR ESTA URL con la URL real de tu frontend en Vercel
-const frontendURL = "nrlsb-excel-reparto1.vercel.app"; 
+// CORREGIDO: Se agregó "https://" a la URL del frontend
+const frontendURL = "https://nrlsb-excel-reparto1.vercel.app"; 
 
 const corsOptions = {
   origin: frontendURL,
