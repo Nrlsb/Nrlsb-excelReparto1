@@ -1,11 +1,13 @@
 import React from 'react';
 import * as XLSX from 'xlsx';
+import { toast } from 'react-toastify';
 
 function RepartosTable({ repartos, loading, onClearRepartos }) {
 
   const handleExportExcel = () => {
     if (repartos.length === 0) {
-      alert('No hay repartos para exportar.');
+      // Reemplazamos el alert por una notificación
+      toast.info('No hay repartos para exportar.');
       return;
     }
     const datosParaExportar = repartos.map(r => ({

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { toast } from 'react-toastify';
 
 function RepartoForm({ onAddReparto }) {
   const [destino, setDestino] = useState('');
@@ -10,7 +11,8 @@ function RepartoForm({ onAddReparto }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!destino || !direccion || !bultos) {
-      alert('Por favor, completa los campos obligatorios.');
+      // Reemplazamos el alert por una notificación
+      toast.warn('Por favor, completa los campos obligatorios.');
       return;
     }
     

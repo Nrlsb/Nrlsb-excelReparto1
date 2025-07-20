@@ -4,7 +4,19 @@ import { getRepartos, addReparto as addRepartoAPI, clearRepartos as clearReparto
 import Header from './components/Header';
 import RepartoForm from './components/RepartoForm';
 import RepartosTable from './components/RepartosTable';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
+
+// Componente para la confirmación personalizada
+const ConfirmationToast = ({ closeToast, onConfirm }) => (
+  <div>
+    <p>¿Estás seguro de que deseas vaciar TODOS los repartos?</p>
+    <button className="btn btn-danger btn-small" onClick={() => { onConfirm(); closeToast(); }}>Sí, vaciar</button>
+    <button className="btn btn-secondary btn-small" onClick={closeToast}>Cancelar</button>
+  </div>
+);
+
 
 function App() {
   const [repartos, setRepartos] = useState([]);
@@ -19,6 +31,7 @@ function App() {
       setRepartos(data);
       setError(null);
     } catch (err) {
+      // El interceptor de Axios ya maneja la notificación del error
       setError('No se pudieron cargar los repartos. Asegúrate de que el backend esté funcionando.');
       console.error(err);
     } finally {
@@ -38,7 +51,7 @@ function App() {
         { event: '*', schema: 'public', table: 'repartos' },
         (payload) => {
           console.log('Cambio recibido!', payload);
-          // Vuelve a cargar todos los datos para mantener la consistencia
+          toast.info('La lista de repartos ha sido actualizada.');
           fetchRepartos();
         }
       )
@@ -53,30 +66,49 @@ function App() {
   // Función para agregar un nuevo reparto
   const handleAddReparto = async (repartoData) => {
     try {
-      // No es necesario actualizar el estado aquí,
-      // la suscripción de Supabase lo hará automáticamente.
       await addRepartoAPI(repartoData);
+      toast.success('Reparto agregado con éxito!');
+      // La actualización del estado la maneja la suscripción de Supabase
     } catch (err) {
+      // El interceptor de Axios ya maneja la notificación del error
       setError('Error al agregar el reparto.');
       console.error(err);
     }
   };
 
   // Función para vaciar todos los repartos
-  const handleClearRepartos = async () => {
-    if (window.confirm('¿Estás seguro de que deseas vaciar TODOS los repartos?')) {
+  const handleClearRepartos = () => {
+    const confirmClear = async () => {
       try {
         await clearRepartosAPI();
-        // El cambio también será detectado por Supabase
+        toast.success('Todos los repartos han sido eliminados.');
+        // La actualización del estado la maneja la suscripción de Supabase
       } catch (err) {
         setError('Error al vaciar los repartos.');
         console.error(err);
       }
-    }
+    };
+
+    toast(<ConfirmationToast onConfirm={confirmClear} />, {
+      autoClose: false,
+      closeOnClick: false,
+      draggable: false,
+    });
   };
 
   return (
     <div className="container">
+      <ToastContainer
+        position="top-right"
+        autoClose={5000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+      />
       <Header />
       <main>
         <RepartoForm onAddReparto={handleAddReparto} />
