@@ -9,10 +9,18 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// --- Configuración de CORS ---
+// RECUERDA REEMPLAZAR ESTA URL con la URL real de tu frontend en Vercel
+const frontendURL = "nrlsb-excel-reparto1.vercel.app"; 
+
+const corsOptions = {
+  origin: frontendURL,
+  optionsSuccessStatus: 200 // Para compatibilidad con navegadores antiguos
+};
+
 // --- Middlewares ---
-// Habilita CORS para permitir que tu frontend (que correrá en otro puerto)
-// pueda hacer peticiones a este backend.
-app.use(cors());
+// Habilita CORS con las opciones específicas
+app.use(cors(corsOptions));
 
 // Permite al servidor procesar y entender cuerpos de petición en formato JSON.
 app.use(express.json());
