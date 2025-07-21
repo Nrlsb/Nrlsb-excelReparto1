@@ -1,17 +1,63 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { toast } from 'react-toastify';
 import RepartoRow from './RepartoRow';
 
 function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, onDeleteReparto, isAdmin }) {
+  // --- NUEVO: Estados para el ordenamiento ---
+  const [sortKey, setSortKey] = useState('id');
+  const [sortOrder, setSortOrder] = useState('asc');
+
+  // --- NUEVO: Lógica para ordenar los repartos ---
+  const sortedRepartos = useMemo(() => {
+    const sorted = [...repartos];
+    if (sortKey) {
+      sorted.sort((a, b) => {
+        const valA = a[sortKey];
+        const valB = b[sortKey];
+
+        if (valA < valB) {
+          return sortOrder === 'asc' ? -1 : 1;
+        }
+        if (valA > valB) {
+          return sortOrder === 'asc' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    return sorted;
+  }, [repartos, sortKey, sortOrder]);
+
+  // --- NUEVO: Función para manejar el clic en las cabeceras ---
+  const handleSort = (key) => {
+    if (sortKey === key) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey(key);
+      setSortOrder('asc');
+    }
+  };
+
+  // --- NUEVO: Componente para las cabeceras de la tabla ---
+  const SortableHeader = ({ columnKey, children }) => {
+    const isSorted = sortKey === columnKey;
+    const arrow = isSorted ? (sortOrder === 'asc' ? ' ▲' : ' ▼') : '';
+    return (
+      <th 
+        className="p-4 text-left bg-gradient-to-r from-purple-600 to-indigo-600 text-white uppercase text-sm font-bold tracking-wider cursor-pointer hover:bg-gradient-to-l"
+        onClick={() => handleSort(columnKey)}
+      >
+        {children}{arrow}
+      </th>
+    );
+  };
 
   const handleExportExcel = () => {
-    if (repartos.length === 0) {
+    if (sortedRepartos.length === 0) {
       toast.info('No hay repartos para exportar.');
       return;
     }
-    // Añadir 'Agregado por' a la exportación si es admin
-    const datosParaExportar = repartos.map(r => {
+    const datosParaExportar = sortedRepartos.map(r => {
       const baseData = {
         'ID': r.id,
         'Destino': r.destino,
@@ -32,8 +78,7 @@ function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, on
     XLSX.writeFile(wb, "repartos.xlsx");
   };
 
-  // Ajustar el número de columnas para los mensajes de carga y vacío
-  const colSpan = isAdmin ? 7 : 6;
+  const colSpan = isAdmin ? 8 : 7;
 
   return (
     <div className="overflow-x-auto">
@@ -53,27 +98,26 @@ function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, on
         <table className="w-full border-collapse">
           <thead>
             <tr>
-              <th className="p-4 text-left bg-gradient-to-r from-purple-600 to-indigo-600 text-white uppercase text-sm font-bold tracking-wider">ID</th>
-              <th className="p-4 text-left bg-gradient-to-r from-purple-600 to-indigo-600 text-white uppercase text-sm font-bold tracking-wider">Destino</th>
-              <th className="p-4 text-left bg-gradient-to-r from-purple-600 to-indigo-600 text-white uppercase text-sm font-bold tracking-wider">Dirección</th>
-              <th className="p-4 text-left bg-gradient-to-r from-purple-600 to-indigo-600 text-white uppercase text-sm font-bold tracking-wider">Horarios</th>
-              <th className="p-4 text-left bg-gradient-to-r from-purple-600 to-indigo-600 text-white uppercase text-sm font-bold tracking-wider">Bultos</th>
-              {/* Columna condicional para admin */}
-              {isAdmin && <th className="p-4 text-left bg-gradient-to-r from-purple-600 to-indigo-600 text-white uppercase text-sm font-bold tracking-wider">Agregado por</th>}
+              <SortableHeader columnKey="id">ID</SortableHeader>
+              <SortableHeader columnKey="destino">Destino</SortableHeader>
+              <SortableHeader columnKey="direccion">Dirección</SortableHeader>
+              <SortableHeader columnKey="horarios">Horarios</SortableHeader>
+              <SortableHeader columnKey="bultos">Bultos</SortableHeader>
+              {isAdmin && <SortableHeader columnKey="agregado_por">Agregado por</SortableHeader>}
               <th className="p-4 text-center bg-gradient-to-r from-purple-600 to-indigo-600 text-white uppercase text-sm font-bold tracking-wider">Acciones</th> 
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr><td colSpan={colSpan} className="text-center p-10 text-gray-500">Cargando...</td></tr>
-            ) : repartos.length > 0 ? (
-              repartos.map(reparto => (
+            ) : sortedRepartos.length > 0 ? (
+              sortedRepartos.map(reparto => (
                 <RepartoRow 
                   key={reparto.id} 
                   reparto={reparto} 
                   onUpdate={onUpdateReparto}
                   onDelete={onDeleteReparto}
-                  isAdmin={isAdmin} // Pasar prop a la fila
+                  isAdmin={isAdmin}
                 />
               ))
             ) : (
