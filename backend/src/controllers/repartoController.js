@@ -1,17 +1,40 @@
 // src/controllers/repartoController.js
-// --- ARCHIVO MODIFICADO ---
+// --- ARCHIVO MODIFICADO PARA ROL DE ADMIN ---
 
-import { supabase } from '../config/supabaseClient.js';
+import { supabase, supabaseAdmin } from '../config/supabaseClient.js';
+import dotenv from 'dotenv';
 
-// Controlador para obtener todos los repartos del usuario autenticado
+dotenv.config();
+
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
+
+// --- NUEVO: Función para determinar si un usuario es administrador ---
+const isAdmin = (user) => {
+  return user && user.email === ADMIN_EMAIL;
+};
+
+// Controlador para obtener repartos
 export const getRepartos = async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from('repartos')
-      .select('*')
-      .eq('user_id', req.user.id) // Filtramos por el ID del usuario
-      .order('id', { ascending: true });
+    let query;
+    // Si el usuario es admin, usa el cliente de admin para obtener TODOS los repartos
+    if (isAdmin(req.user)) {
+      console.log('Usuario admin detectado. Obteniendo todos los repartos.');
+      query = supabaseAdmin
+        .from('repartos')
+        .select('*')
+        .order('id', { ascending: true });
+    } else {
+      // Si es un usuario normal, usa el cliente estándar y filtra por su ID
+      console.log('Usuario normal detectado. Obteniendo sus repartos.');
+      query = supabase
+        .from('repartos')
+        .select('*')
+        .eq('user_id', req.user.id)
+        .order('id', { ascending: true });
+    }
 
+    const { data, error } = await query;
     if (error) throw error;
 
     res.status(200).json(data);
@@ -20,7 +43,7 @@ export const getRepartos = async (req, res) => {
   }
 };
 
-// Controlador para agregar un nuevo reparto
+// Controlador para agregar un nuevo reparto (sin cambios, ya que siempre se asocia al usuario que lo crea)
 export const addReparto = async (req, res) => {
   const { destino, direccion, horarios, bultos, agregado_por } = req.body;
 
@@ -56,13 +79,17 @@ export const updateReparto = async (req, res) => {
   const { destino, direccion, horarios, bultos } = req.body;
 
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('repartos')
       .update({ destino, direccion, horarios, bultos })
-      .eq('id', id)
-      .eq('user_id', req.user.id) // Aseguramos que solo pueda actualizar sus propios repartos
-      .select()
-      .single();
+      .eq('id', id);
+
+    // El admin puede editar cualquier reparto, el usuario normal solo los suyos.
+    if (!isAdmin(req.user)) {
+      query = query.eq('user_id', req.user.id);
+    }
+    
+    const { data, error } = await query.select().single();
 
     if (error) throw error;
     if (!data) return res.status(404).json({ error: 'Reparto no encontrado o no tienes permiso para editarlo.' });
@@ -78,13 +105,24 @@ export const deleteReparto = async (req, res) => {
   const { id } = req.params;
 
   try {
-    const { error } = await supabase
+    let query = supabase
       .from('repartos')
       .delete()
-      .eq('id', id)
-      .eq('user_id', req.user.id); // Aseguramos que solo pueda eliminar sus propios repartos
+      .eq('id', id);
+
+    // El admin puede eliminar cualquier reparto, el usuario normal solo los suyos.
+    if (!isAdmin(req.user)) {
+      query = query.eq('user_id', req.user.id);
+    }
+
+    const { error, count } = await query;
 
     if (error) throw error;
+    if (count === 0 && !isAdmin(req.user)) {
+        // Este caso puede darse si un usuario intenta borrar un reparto que no le pertenece.
+        return res.status(404).json({ error: 'Reparto no encontrado o no tienes permiso para eliminarlo.' });
+    }
+
 
     res.status(200).json({ message: 'Reparto eliminado correctamente.' });
   } catch (error) {
@@ -92,17 +130,23 @@ export const deleteReparto = async (req, res) => {
   }
 };
 
-// Controlador para eliminar todos los repartos del usuario
+// Controlador para eliminar todos los repartos
 export const clearRepartos = async (req, res) => {
   try {
-    const { error } = await supabase
-      .from('repartos')
-      .delete()
-      .eq('user_id', req.user.id); // Eliminamos solo los repartos del usuario actual
+    let query;
+    
+    // El admin borra TODOS los repartos de la tabla. El usuario normal solo los suyos.
+    if (isAdmin(req.user)) {
+      query = supabaseAdmin.from('repartos').delete().neq('id', 0); // .neq es una forma de decir "donde id no sea 0", para borrar todo
+    } else {
+      query = supabase.from('repartos').delete().eq('user_id', req.user.id);
+    }
+
+    const { error } = await query;
 
     if (error) throw error;
 
-    res.status(200).json({ message: 'Todos tus repartos han sido eliminados correctamente.' });
+    res.status(200).json({ message: 'Repartos eliminados correctamente.' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
