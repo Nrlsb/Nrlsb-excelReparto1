@@ -12,17 +12,11 @@ const apiClient = axios.create({
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Extrae el mensaje de error de la respuesta de la API, o usa uno por defecto
     const message = error.response?.data?.error || 'Ocurrió un error inesperado en la red.';
-    
-    // Muestra una notificación de error al usuario
     toast.error(message);
-    
-    // Rechaza la promesa para que el error pueda ser manejado localmente si es necesario
     return Promise.reject(error);
   }
 );
-
 
 export const getRepartos = async () => {
   const response = await apiClient.get('/repartos');
@@ -31,6 +25,18 @@ export const getRepartos = async () => {
 
 export const addReparto = async (repartoData) => {
   const response = await apiClient.post('/repartos', repartoData);
+  return response.data;
+};
+
+// NUEVA FUNCIÓN: Actualizar un reparto
+export const updateReparto = async (id, repartoData) => {
+  const response = await apiClient.put(`/repartos/${id}`, repartoData);
+  return response.data;
+};
+
+// NUEVA FUNCIÓN: Eliminar un reparto
+export const deleteReparto = async (id) => {
+  const response = await apiClient.delete(`/repartos/${id}`);
   return response.data;
 };
 
