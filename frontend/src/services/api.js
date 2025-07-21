@@ -2,7 +2,7 @@
 // --- ARCHIVO MODIFICADO ---
 import axios from 'axios';
 import { toast } from 'react-toastify';
-import { supabase } from '../supabaseClient'; // Importamos supabase
+import { supabase } from '../supabaseClient';
 
 const apiClient = axios.create({
   baseURL: process.env.REACT_APP_API_URL,
@@ -11,7 +11,6 @@ const apiClient = axios.create({
   },
 });
 
-// --- NUEVO: Interceptor para añadir el token de autenticación ---
 apiClient.interceptors.request.use(async (config) => {
   const { data: { session } } = await supabase.auth.getSession();
   
@@ -24,15 +23,11 @@ apiClient.interceptors.request.use(async (config) => {
   return Promise.reject(error);
 });
 
-
-// Interceptor para manejar errores de forma centralizada
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    // --- NUEVO: Si el error es 401, podría ser un token expirado ---
     if (error.response?.status === 401) {
         toast.error('Tu sesión ha expirado. Por favor, inicia sesión de nuevo.');
-        // Opcional: forzar el cierre de sesión
         supabase.auth.signOut();
     } else {
         const message = error.response?.data?.error || 'Ocurrió un error inesperado en la red.';
@@ -64,5 +59,11 @@ export const deleteReparto = async (id) => {
 
 export const clearRepartos = async () => {
   const response = await apiClient.delete('/repartos');
+  return response.data;
+};
+
+// --- NUEVA FUNCIÓN ---
+export const updateProfile = async (username) => {
+  const response = await apiClient.put('/profile', { username });
   return response.data;
 };

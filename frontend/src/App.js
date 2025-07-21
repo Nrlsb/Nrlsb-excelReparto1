@@ -1,5 +1,5 @@
 // src/App.js
-// --- ARCHIVO MODIFICADO ---
+// --- ARCHIVO MODIFICADO para manejar el modal de cuenta ---
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { 
@@ -7,17 +7,19 @@ import {
   addReparto as addRepartoAPI, 
   updateReparto as updateRepartoAPI,
   deleteReparto as deleteRepartoAPI,
-  clearRepartos as clearRepartosAPI 
+  clearRepartos as clearRepartosAPI,
+  updateProfile // 1. Importar la nueva función de la API
 } from './services/api';
 import Header from './components/Header';
 import RepartoForm from './components/RepartoForm';
 import RepartosTable from './components/RepartosTable';
 import Auth from './components/Auth';
+import Account from './components/Account'; // 2. Importar el nuevo componente
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-// Componente para la confirmación personalizada con clases de Tailwind
 const ConfirmationToast = ({ closeToast, onConfirm, message }) => (
+  // ... (el código de este componente no cambia)
   <div>
     <p className="mb-3 text-gray-700">{message}</p>
     <div className="flex justify-end gap-3">
@@ -41,7 +43,9 @@ function App() {
   const [repartos, setRepartos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isAccountModalOpen, setIsAccountModalOpen] = useState(false); // 3. Estado para el modal
 
+  // ... (useEffect para la sesión no cambia)
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -64,8 +68,8 @@ function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-
   const fetchRepartos = useCallback(async () => {
+    // ... (esta función no cambia)
     try {
       setLoading(true);
       const data = await getRepartos();
@@ -80,6 +84,7 @@ function App() {
   }, []);
 
   useEffect(() => {
+    // ... (useEffect para la suscripción a cambios no cambia)
     if (!session) return;
 
     fetchRepartos();
@@ -101,14 +106,32 @@ function App() {
       supabase.removeChannel(channel);
     };
   }, [session, fetchRepartos]);
+  
+  // --- NUEVA FUNCIÓN para manejar la actualización del perfil ---
+  const handleUpdateUsername = async (newUsername) => {
+    try {
+      await updateProfile(newUsername);
+      
+      // Forzamos la actualización de la sesión para obtener los nuevos metadatos
+      const { data, error } = await supabase.auth.refreshSession();
+      if (error) throw error;
+      if (data.session) setSession(data.session);
 
+      toast.success('¡Nombre de usuario actualizado con éxito!');
+      setIsAccountModalOpen(false); // Cerramos el modal
+    } catch (err) {
+      // El error ya es manejado por el interceptor de Axios en api.js
+      console.error("Error al actualizar el perfil:", err);
+    }
+  };
+
+  // ... (las funciones handleAdd, handleUpdate, handleDelete y handleClear no cambian)
   const handleAddReparto = async (repartoData) => {
     if (!session?.user) {
         toast.error("Debes iniciar sesión para agregar un reparto.");
         return;
     }
     try {
-      // La lógica de 'agregado_por' ahora está dentro de RepartoForm
       await addRepartoAPI(repartoData);
       toast.success('Reparto agregado con éxito!');
     } catch (err) {
@@ -159,6 +182,7 @@ function App() {
     });
   };
 
+
   return (
     <div className="bg-gradient-to-br from-purple-50 to-indigo-100 min-h-screen p-4 sm:p-8">
       <ToastContainer
@@ -177,9 +201,9 @@ function App() {
           <Auth />
         ) : (
           <>
-            <Header session={session} />
+            {/* 4. Pasamos la función para abrir el modal al Header */}
+            <Header session={session} onOpenAccountModal={() => setIsAccountModalOpen(true)} />
             <main>
-              {/* Pasamos la sesión completa al formulario */}
               <RepartoForm onAddReparto={handleAddReparto} session={session} />
               {error && <p className="text-red-600 bg-red-100 border border-red-600 rounded-lg p-3 my-4">{error}</p>}
               <RepartosTable
@@ -190,6 +214,14 @@ function App() {
                 onDeleteReparto={handleDeleteReparto}
               />
             </main>
+            {/* 5. Renderizamos el modal si el estado es true */}
+            {isAccountModalOpen && (
+              <Account
+                session={session}
+                onClose={() => setIsAccountModalOpen(false)}
+                onSave={handleUpdateUsername}
+              />
+            )}
           </>
         )}
       </div>

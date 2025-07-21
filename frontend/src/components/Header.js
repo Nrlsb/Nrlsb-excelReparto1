@@ -1,14 +1,13 @@
 // src/components/Header.js
-// --- ARCHIVO MODIFICADO para mostrar el nombre de usuario ---
+// --- ARCHIVO MODIFICADO para abrir el modal de cuenta ---
 import React from 'react';
 import { supabase } from '../supabaseClient';
 
-function Header({ session }) {
+function Header({ session, onOpenAccountModal }) { // Añadimos la nueva prop
   const handleLogout = async () => {
     await supabase.auth.signOut();
   };
 
-  // Obtener el nombre de usuario de los metadatos del usuario
   const username = session?.user?.user_metadata?.username || session?.user?.email;
 
   return (
@@ -21,7 +20,13 @@ function Header({ session }) {
       </p>
       {session && (
         <div className="absolute top-0 right-0 flex items-center gap-4">
-          <span className="text-sm text-gray-600 hidden sm:inline font-semibold">{username}</span>
+          {/* El nombre de usuario ahora es un botón para abrir el modal */}
+          <button 
+            onClick={onOpenAccountModal}
+            className="text-sm text-gray-600 hidden sm:inline font-semibold hover:text-purple-600 hover:underline transition-colors"
+          >
+            {username}
+          </button>
           <button 
             onClick={handleLogout}
             className="px-4 py-2 text-sm font-semibold text-white bg-red-500 rounded-lg shadow-md hover:bg-red-600 transition-colors"
