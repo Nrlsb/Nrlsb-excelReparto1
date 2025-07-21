@@ -1,6 +1,9 @@
+// src/components/RepartoForm.js
+// --- ARCHIVO MODIFICADO ---
 import React, { useState } from 'react';
 import { toast } from 'react-toastify';
 
+// Ya no necesitamos recibir el user, lo manejaremos en App.js
 function RepartoForm({ onAddReparto }) {
   const [destino, setDestino] = useState('');
   const [direccion, setDireccion] = useState('');
@@ -17,12 +20,12 @@ function RepartoForm({ onAddReparto }) {
     
     setIsSubmitting(true);
     try {
+      // El 'agregado_por' ahora se añade en App.js
       await onAddReparto({
         destino,
         direccion,
         horarios,
         bultos: parseInt(bultos),
-        agregado_por: 'WebApp'
       });
       
       // Limpiar formulario

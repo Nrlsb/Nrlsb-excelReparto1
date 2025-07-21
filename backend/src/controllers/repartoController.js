@@ -1,12 +1,16 @@
+// src/controllers/repartoController.js
+// --- ARCHIVO MODIFICADO ---
+
 import { supabase } from '../config/supabaseClient.js';
 
-// Controlador para obtener todos los repartos
+// Controlador para obtener todos los repartos del usuario autenticado
 export const getRepartos = async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('repartos')
       .select('*')
-      .order('id', { ascending: true }); // Ordena por ID para consistencia
+      .eq('user_id', req.user.id) // Filtramos por el ID del usuario
+      .order('id', { ascending: true });
 
     if (error) throw error;
 
@@ -20,7 +24,6 @@ export const getRepartos = async (req, res) => {
 export const addReparto = async (req, res) => {
   const { destino, direccion, horarios, bultos, agregado_por } = req.body;
 
-  // Validación básica de los datos de entrada
   if (!destino || !direccion || !bultos) {
     return res.status(400).json({ error: 'Los campos destino, direccion y bultos son obligatorios.' });
   }
@@ -28,9 +31,16 @@ export const addReparto = async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('repartos')
-      .insert([{ destino, direccion, horarios, bultos, agregado_por }])
-      .select() // .select() devuelve el registro insertado
-      .single(); // .single() para obtener un objeto en lugar de un array
+      .insert([{ 
+        destino, 
+        direccion, 
+        horarios, 
+        bultos, 
+        agregado_por,
+        user_id: req.user.id // Asociamos el reparto con el ID del usuario
+      }])
+      .select()
+      .single();
 
     if (error) throw error;
 
@@ -50,12 +60,12 @@ export const updateReparto = async (req, res) => {
       .from('repartos')
       .update({ destino, direccion, horarios, bultos })
       .eq('id', id)
+      .eq('user_id', req.user.id) // Aseguramos que solo pueda actualizar sus propios repartos
       .select()
       .single();
 
     if (error) throw error;
-    if (!data) return res.status(404).json({ error: 'Reparto no encontrado.' });
-
+    if (!data) return res.status(404).json({ error: 'Reparto no encontrado o no tienes permiso para editarlo.' });
 
     res.status(200).json(data);
   } catch (error) {
@@ -71,7 +81,8 @@ export const deleteReparto = async (req, res) => {
     const { error } = await supabase
       .from('repartos')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .eq('user_id', req.user.id); // Aseguramos que solo pueda eliminar sus propios repartos
 
     if (error) throw error;
 
@@ -81,18 +92,17 @@ export const deleteReparto = async (req, res) => {
   }
 };
 
-
-// Controlador para eliminar todos los repartos
+// Controlador para eliminar todos los repartos del usuario
 export const clearRepartos = async (req, res) => {
   try {
     const { error } = await supabase
       .from('repartos')
       .delete()
-      .neq('id', 0); // Condición para borrar todos los registros (id no es igual a 0)
+      .eq('user_id', req.user.id); // Eliminamos solo los repartos del usuario actual
 
     if (error) throw error;
 
-    res.status(200).json({ message: 'Todos los repartos han sido eliminados correctamente.' });
+    res.status(200).json({ message: 'Todos tus repartos han sido eliminados correctamente.' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

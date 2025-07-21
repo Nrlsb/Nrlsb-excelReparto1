@@ -1,3 +1,5 @@
+// src/App.js
+// --- ARCHIVO MODIFICADO ---
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { 
@@ -10,6 +12,7 @@ import {
 import Header from './components/Header';
 import RepartoForm from './components/RepartoForm';
 import RepartosTable from './components/RepartosTable';
+import Auth from './components/Auth'; // Importamos el nuevo componente de Auth
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -34,9 +37,34 @@ const ConfirmationToast = ({ closeToast, onConfirm, message }) => (
 
 
 function App() {
+  const [session, setSession] = useState(null);
   const [repartos, setRepartos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // --- NUEVO: Manejo de sesión ---
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session) {
+        fetchRepartos();
+      } else {
+        setLoading(false);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session) {
+        fetchRepartos();
+      } else {
+        setRepartos([]);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
 
   const fetchRepartos = useCallback(async () => {
     try {
@@ -52,9 +80,12 @@ function App() {
     }
   }, []);
 
+  // --- NUEVO: Suscripción a cambios en la base de datos ---
   useEffect(() => {
+    if (!session) return; // No suscribirse si no hay sesión
+
     fetchRepartos();
-    // Ya no importamos App.css
+    
     const channel = supabase
       .channel('repartos_changes')
       .on(
@@ -71,11 +102,16 @@ function App() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [fetchRepartos]);
+  }, [session, fetchRepartos]);
 
   const handleAddReparto = async (repartoData) => {
+    if (!session?.user) {
+        toast.error("Debes iniciar sesión para agregar un reparto.");
+        return;
+    }
     try {
-      await addRepartoAPI(repartoData);
+      // Añadimos el email del usuario al reparto
+      await addRepartoAPI({ ...repartoData, agregado_por: session.user.email });
       toast.success('Reparto agregado con éxito!');
     } catch (err) {
       setError('Error al agregar el reparto.');
@@ -139,18 +175,25 @@ function App() {
         pauseOnHover
       />
       <div className="max-w-7xl mx-auto bg-white/95 rounded-2xl shadow-xl p-6 sm:p-8 backdrop-blur-sm">
-        <Header />
-        <main>
-          <RepartoForm onAddReparto={handleAddReparto} />
-          {error && <p className="text-red-600 bg-red-100 border border-red-600 rounded-lg p-3 my-4">{error}</p>}
-          <RepartosTable
-            repartos={repartos}
-            loading={loading}
-            onClearRepartos={handleClearRepartos}
-            onUpdateReparto={handleUpdateReparto}
-            onDeleteReparto={handleDeleteReparto}
-          />
-        </main>
+        {/* --- NUEVO: Renderizado condicional --- */}
+        {!session ? (
+          <Auth />
+        ) : (
+          <>
+            <Header session={session} />
+            <main>
+              <RepartoForm onAddReparto={handleAddReparto} />
+              {error && <p className="text-red-600 bg-red-100 border border-red-600 rounded-lg p-3 my-4">{error}</p>}
+              <RepartosTable
+                repartos={repartos}
+                loading={loading}
+                onClearRepartos={handleClearRepartos}
+                onUpdateReparto={handleUpdateReparto}
+                onDeleteReparto={handleDeleteReparto}
+              />
+            </main>
+          </>
+        )}
       </div>
     </div>
   );
