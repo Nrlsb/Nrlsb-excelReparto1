@@ -69,7 +69,7 @@ export default function Auth() {
                 📦 Gestión de Repartos
             </h1>
             <p className="text-gray-500 text-md sm:text-lg mt-2">
-                Inicia sesión o regístrate para continuar
+                Inicia sesión o regístrate para continuar 
             </p>
         </div>
         <form className="bg-white shadow-lg rounded-xl px-8 pt-6 pb-8 mb-4 border border-gray-200">
