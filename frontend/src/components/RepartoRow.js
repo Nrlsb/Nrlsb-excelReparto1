@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-function RepartoRow({ reparto, onUpdate, onDelete }) {
+function RepartoRow({ reparto, onUpdate, onDelete, isAdmin }) { // Recibir isAdmin
   const [isEditing, setIsEditing] = useState(false);
   const [editedReparto, setEditedReparto] = useState({ ...reparto });
 
@@ -28,6 +28,8 @@ function RepartoRow({ reparto, onUpdate, onDelete }) {
         <td className="p-4 border-b border-gray-200"><input type="text" name="direccion" value={editedReparto.direccion} onChange={handleInputChange} className={commonInputClass} /></td>
         <td className="p-4 border-b border-gray-200"><input type="text" name="horarios" value={editedReparto.horarios} onChange={handleInputChange} className={commonInputClass} /></td>
         <td className="p-4 border-b border-gray-200"><input type="number" name="bultos" value={editedReparto.bultos} onChange={handleInputChange} min="1" className={commonInputClass} /></td>
+        {/* Mostrar el nombre del creador (no editable) */}
+        {isAdmin && <td className="p-4 border-b border-gray-200 text-gray-700">{reparto.agregado_por}</td>}
         <td className="p-4 border-b border-gray-200 text-center">
           <div className="flex justify-center gap-2">
             <button className="px-3 py-1 text-sm font-semibold text-white bg-green-500 rounded-md hover:bg-green-600" onClick={handleSave}>✔</button>
@@ -45,6 +47,8 @@ function RepartoRow({ reparto, onUpdate, onDelete }) {
       <td className="p-4 border-b border-gray-200 text-gray-700">{reparto.direccion}</td>
       <td className="p-4 border-b border-gray-200 text-gray-700">{reparto.horarios}</td>
       <td className="p-4 border-b border-gray-200 text-gray-700">{reparto.bultos}</td>
+      {/* Celda condicional para admin */}
+      {isAdmin && <td className="p-4 border-b border-gray-200 text-gray-700">{reparto.agregado_por}</td>}
       <td className="p-4 border-b border-gray-200 text-center">
         <div className="flex justify-center gap-2">
           <button className="px-3 py-1 text-sm font-semibold text-white bg-blue-500 rounded-md hover:bg-blue-600" onClick={() => setIsEditing(true)}>✏️</button>

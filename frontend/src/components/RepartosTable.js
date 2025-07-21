@@ -3,27 +3,37 @@ import * as XLSX from 'xlsx';
 import { toast } from 'react-toastify';
 import RepartoRow from './RepartoRow';
 
-function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, onDeleteReparto }) {
+function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, onDeleteReparto, isAdmin }) {
 
   const handleExportExcel = () => {
     if (repartos.length === 0) {
       toast.info('No hay repartos para exportar.');
       return;
     }
-    const datosParaExportar = repartos.map(r => ({
-      'ID': r.id,
-      'Destino': r.destino,
-      'Dirección': r.direccion,
-      'Horarios': r.horarios,
-      'Bultos': r.bultos,
-      'Fecha de Creación': new Date(r.created_at).toLocaleString()
-    }));
+    // Añadir 'Agregado por' a la exportación si es admin
+    const datosParaExportar = repartos.map(r => {
+      const baseData = {
+        'ID': r.id,
+        'Destino': r.destino,
+        'Dirección': r.direccion,
+        'Horarios': r.horarios,
+        'Bultos': r.bultos,
+        'Fecha de Creación': new Date(r.created_at).toLocaleString()
+      };
+      if (isAdmin) {
+        baseData['Agregado por'] = r.agregado_por;
+      }
+      return baseData;
+    });
 
     const ws = XLSX.utils.json_to_sheet(datosParaExportar);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Repartos");
     XLSX.writeFile(wb, "repartos.xlsx");
   };
+
+  // Ajustar el número de columnas para los mensajes de carga y vacío
+  const colSpan = isAdmin ? 7 : 6;
 
   return (
     <div className="overflow-x-auto">
@@ -48,12 +58,14 @@ function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, on
               <th className="p-4 text-left bg-gradient-to-r from-purple-600 to-indigo-600 text-white uppercase text-sm font-bold tracking-wider">Dirección</th>
               <th className="p-4 text-left bg-gradient-to-r from-purple-600 to-indigo-600 text-white uppercase text-sm font-bold tracking-wider">Horarios</th>
               <th className="p-4 text-left bg-gradient-to-r from-purple-600 to-indigo-600 text-white uppercase text-sm font-bold tracking-wider">Bultos</th>
+              {/* Columna condicional para admin */}
+              {isAdmin && <th className="p-4 text-left bg-gradient-to-r from-purple-600 to-indigo-600 text-white uppercase text-sm font-bold tracking-wider">Agregado por</th>}
               <th className="p-4 text-center bg-gradient-to-r from-purple-600 to-indigo-600 text-white uppercase text-sm font-bold tracking-wider">Acciones</th> 
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan="6" className="text-center p-10 text-gray-500">Cargando...</td></tr>
+              <tr><td colSpan={colSpan} className="text-center p-10 text-gray-500">Cargando...</td></tr>
             ) : repartos.length > 0 ? (
               repartos.map(reparto => (
                 <RepartoRow 
@@ -61,10 +73,11 @@ function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, on
                   reparto={reparto} 
                   onUpdate={onUpdateReparto}
                   onDelete={onDeleteReparto}
+                  isAdmin={isAdmin} // Pasar prop a la fila
                 />
               ))
             ) : (
-              <tr><td colSpan="6" className="text-center p-10 text-gray-500">No hay repartos cargados.</td></tr>
+              <tr><td colSpan={colSpan} className="text-center p-10 text-gray-500">No hay repartos cargados.</td></tr>
             )}
           </tbody>
         </table>

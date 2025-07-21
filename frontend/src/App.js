@@ -1,5 +1,5 @@
 // src/App.js
-// --- ARCHIVO MODIFICADO para manejar el modal de cuenta ---
+// --- ARCHIVO MODIFICADO para rol de admin en la UI ---
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import { 
@@ -8,18 +8,17 @@ import {
   updateReparto as updateRepartoAPI,
   deleteReparto as deleteRepartoAPI,
   clearRepartos as clearRepartosAPI,
-  updateProfile // 1. Importar la nueva función de la API
+  updateProfile
 } from './services/api';
 import Header from './components/Header';
 import RepartoForm from './components/RepartoForm';
 import RepartosTable from './components/RepartosTable';
 import Auth from './components/Auth';
-import Account from './components/Account'; // 2. Importar el nuevo componente
+import Account from './components/Account';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 const ConfirmationToast = ({ closeToast, onConfirm, message }) => (
-  // ... (el código de este componente no cambia)
   <div>
     <p className="mb-3 text-gray-700">{message}</p>
     <div className="flex justify-end gap-3">
@@ -43,9 +42,11 @@ function App() {
   const [repartos, setRepartos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [isAccountModalOpen, setIsAccountModalOpen] = useState(false); // 3. Estado para el modal
+  const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
 
-  // ... (useEffect para la sesión no cambia)
+  // --- NUEVO: Determinar si el usuario es admin ---
+  const isAdmin = session?.user?.email === process.env.REACT_APP_ADMIN_EMAIL;
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -69,7 +70,6 @@ function App() {
   }, []);
 
   const fetchRepartos = useCallback(async () => {
-    // ... (esta función no cambia)
     try {
       setLoading(true);
       const data = await getRepartos();
@@ -84,7 +84,6 @@ function App() {
   }, []);
 
   useEffect(() => {
-    // ... (useEffect para la suscripción a cambios no cambia)
     if (!session) return;
 
     fetchRepartos();
@@ -107,25 +106,21 @@ function App() {
     };
   }, [session, fetchRepartos]);
   
-  // --- NUEVA FUNCIÓN para manejar la actualización del perfil ---
   const handleUpdateUsername = async (newUsername) => {
     try {
       await updateProfile(newUsername);
       
-      // Forzamos la actualización de la sesión para obtener los nuevos metadatos
       const { data, error } = await supabase.auth.refreshSession();
       if (error) throw error;
       if (data.session) setSession(data.session);
 
       toast.success('¡Nombre de usuario actualizado con éxito!');
-      setIsAccountModalOpen(false); // Cerramos el modal
+      setIsAccountModalOpen(false);
     } catch (err) {
-      // El error ya es manejado por el interceptor de Axios en api.js
       console.error("Error al actualizar el perfil:", err);
     }
   };
 
-  // ... (las funciones handleAdd, handleUpdate, handleDelete y handleClear no cambian)
   const handleAddReparto = async (repartoData) => {
     if (!session?.user) {
         toast.error("Debes iniciar sesión para agregar un reparto.");
@@ -201,7 +196,6 @@ function App() {
           <Auth />
         ) : (
           <>
-            {/* 4. Pasamos la función para abrir el modal al Header */}
             <Header session={session} onOpenAccountModal={() => setIsAccountModalOpen(true)} />
             <main>
               <RepartoForm onAddReparto={handleAddReparto} session={session} />
@@ -212,9 +206,9 @@ function App() {
                 onClearRepartos={handleClearRepartos}
                 onUpdateReparto={handleUpdateReparto}
                 onDeleteReparto={handleDeleteReparto}
+                isAdmin={isAdmin} // Pasamos el booleano de admin
               />
             </main>
-            {/* 5. Renderizamos el modal si el estado es true */}
             {isAccountModalOpen && (
               <Account
                 session={session}
