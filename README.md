@@ -98,3 +98,100 @@ La configuración de CORS en el backend está ajustada para aceptar peticiones �
 ## 📄 Licencia
 
 Este proyecto está bajo la Licencia MIT. Consulta el archivo `LICENSE` para más detalles.
+Gestión de Repartos - Full Stack
+Una aplicación web full-stack moderna para la gestión de repartos de forma
+colaborativa. Construida con React, Node.js y Supabase para ofrecer una experiencia
+fluida y en tiempo real.
+Ver demostración en vivo
+
+✨ Características principales
+● CRUD Completo : Crea, lee, actualiza y elimina repartos de forma intuitiva.
+● Sincronización en Tiempo Real : Los cambios se reflejan instantáneamente en
+todas las pantallas de los usuarios gracias a las suscripciones de Supabase.
+● Interfaz Moderna y Responsiva : Desarrollada con React y estilizada con
+Tailwind CSS para una experiencia de usuario limpia y adaptable a cualquier
+dispositivo.
+● Exportación a Excel : Descarga la lista completa de repartos en un archivo .xlsx
+con un solo clic.
+● Backend Robusto : API RESTful construida con Node.js y Express que maneja
+toda la lógica de negocio de forma eficiente.
+● Arquitectura Desacoplada : Frontend y Backend separados para mejorar la
+escalabilidad, el mantenimiento y la organización del código.
+● Despliegue Profesional : Alojado en plataformas líderes como Vercel para el
+frontend y Render para el backend.
+🚀 Stack Tecnológico
+Área Tecnología
+Frontend
+Backend
+Base de Datos
+Despliegue
+📁 Estructura del Proyecto
+El repositorio está organizado en dos carpetas principales:
+● /frontend: Contiene la aplicación de React.
+● /backend: Contiene el servidor de Node.js y la API de Express.
+
+🛠 Cómo Ejecutar el Proyecto en Local
+Sigue estos pasos para configurar y ejecutar el proyecto en tu máquina.
+Requisitos Previos
+● Node.js (v16 o superior)
+● npm o Yarn
+● Una cuenta gratuita en Supabase
+
+1. Configuración de Supabase
+1. Crea un nuevo proyecto en Supabase.
+2. Dentro de tu proyecto, ve un Editor SQL y ejecuta la siguiente consulta para crear
+la tabla de repartos:
+CREATE TABLE repartos (
+id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+destino TEXT NOT NULL,
+direccion TEXT NOT NULL,
+horarios TEXT,
+bultos INT NOT NULL,
+agregado_por TEXT,
+create_at TIMESTAMPTZ DEFAULT NOW()
+);
+3. Ve a Configuración > API y copia tu URL del Proyecto y tu clave anon (pública) . Las necesidades
+para los siguientes pasos.
+2. Configuración del Backend
+1. Navega a la carpeta del backend:
+cd backend
+2. Instala las dependencias:
+npm install
+3. Crea un archivo .env en la raíz de la carpeta /backend y añade tus credenciales
+de Supabase:
+SUPABASE_URL=TU_URL_DE_SUPABASE
+SUPABASE_ANON_KEY=TU_CLAVE_ANON_DE_SUPABASE
+PORT=
+4. Inicia el servidor de desarrollo:
+
+npm run dev
+El backend estará corriendo en http://localhost:3001.
+3. Configuración del Frontend
+1. Abre una nueva terminal y navega a la carpeta del frontend:
+cd frontend
+2. Instala las dependencias:
+npm install
+3. Crea un archivo .env en la raíz de la carpeta /frontend y añade las siguientes
+variables:
+REACT_APP_SUPABASE_URL=TU_URL_DE_SUPABASE
+REACT_APP_SUPABASE_ANON_KEY=TU_CLAVE_ANON_DE_SUPABASE
+REACT_APP_API_URL=http://localhost:3001/api
+4. Inicia la aplicación de React:
+npm start
+El frontend estará disponible en http://localhost:3000 y se conectará a tu
+backend local.
+
+☁ Despliegue
+● Frontend (React) : Desplegado en Vercel . Las variables de entorno
+(REACT_APP_*) se configuran en el panel de Vercel. REACT_APP_API_URL debe
+apuntar a la URL pública de su backend en Render.
+● Backend (Node.js) : Desplegado como un servicio web en Render . Las variables
+de entorno (SUPABASE_URL, SUPABASE_ANON_KEY) se configuran en el panel
+de Render.
+La configuración de CORS en backend/src/server.js está ajustada para aceptar
+solicitudes únicamente desde la URL del frontend desplegado, garantizando la
+seguridad.
+
+📄 Licencia
+Este proyecto está bajo la Licencia MIT. Consulta el archivo LICENCIA para más
+detalles.
