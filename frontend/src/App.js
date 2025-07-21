@@ -12,7 +12,7 @@ import {
 import Header from './components/Header';
 import RepartoForm from './components/RepartoForm';
 import RepartosTable from './components/RepartosTable';
-import Auth from './components/Auth'; // Importamos el nuevo componente de Auth
+import Auth from './components/Auth';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -42,7 +42,6 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // --- NUEVO: Manejo de sesión ---
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -80,9 +79,8 @@ function App() {
     }
   }, []);
 
-  // --- NUEVO: Suscripción a cambios en la base de datos ---
   useEffect(() => {
-    if (!session) return; // No suscribirse si no hay sesión
+    if (!session) return;
 
     fetchRepartos();
     
@@ -110,8 +108,8 @@ function App() {
         return;
     }
     try {
-      // Añadimos el email del usuario al reparto
-      await addRepartoAPI({ ...repartoData, agregado_por: session.user.email });
+      // La lógica de 'agregado_por' ahora está dentro de RepartoForm
+      await addRepartoAPI(repartoData);
       toast.success('Reparto agregado con éxito!');
     } catch (err) {
       setError('Error al agregar el reparto.');
@@ -175,14 +173,14 @@ function App() {
         pauseOnHover
       />
       <div className="max-w-7xl mx-auto bg-white/95 rounded-2xl shadow-xl p-6 sm:p-8 backdrop-blur-sm">
-        {/* --- NUEVO: Renderizado condicional --- */}
         {!session ? (
           <Auth />
         ) : (
           <>
             <Header session={session} />
             <main>
-              <RepartoForm onAddReparto={handleAddReparto} />
+              {/* Pasamos la sesión completa al formulario */}
+              <RepartoForm onAddReparto={handleAddReparto} session={session} />
               {error && <p className="text-red-600 bg-red-100 border border-red-600 rounded-lg p-3 my-4">{error}</p>}
               <RepartosTable
                 repartos={repartos}

@@ -1,10 +1,9 @@
 // src/components/RepartoForm.js
-// --- ARCHIVO MODIFICADO ---
+// --- ARCHIVO MODIFICADO para usar el nombre de usuario ---
 import React, { useState } from 'react';
 import { toast } from 'react-toastify';
 
-// Ya no necesitamos recibir el user, lo manejaremos en App.js
-function RepartoForm({ onAddReparto }) {
+function RepartoForm({ onAddReparto, session }) { // Recibimos la sesión completa
   const [destino, setDestino] = useState('');
   const [direccion, setDireccion] = useState('');
   const [horarios, setHorarios] = useState('');
@@ -20,12 +19,15 @@ function RepartoForm({ onAddReparto }) {
     
     setIsSubmitting(true);
     try {
-      // El 'agregado_por' ahora se añade en App.js
+      // Obtenemos el username de los metadatos, o el email como fallback
+      const agregadoPor = session?.user?.user_metadata?.username || session?.user?.email;
+
       await onAddReparto({
         destino,
         direccion,
         horarios,
         bultos: parseInt(bultos),
+        agregado_por: agregadoPor, // Enviamos el nombre de usuario
       });
       
       // Limpiar formulario
