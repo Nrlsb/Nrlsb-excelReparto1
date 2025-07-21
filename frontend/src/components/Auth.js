@@ -1,7 +1,8 @@
 // src/components/Auth.js
-// --- ARCHIVO NUEVO ---
+// --- ARCHIVO MODIFICADO ---
 import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
+import { toast } from 'react-toastify'; // Importar toast para notificaciones
 
 export default function Auth() {
   const [loading, setLoading] = useState(false);
@@ -16,7 +17,8 @@ export default function Auth() {
       if (error) throw error;
       // El inicio de sesión exitoso será manejado por onAuthStateChange en App.js
     } catch (error) {
-      alert(error.error_description || error.message);
+      // Usar toast en lugar de alert para una mejor UX
+      toast.error(error.error_description || error.message);
     } finally {
       setLoading(false);
     }
@@ -24,13 +26,36 @@ export default function Auth() {
   
   const handleSignUp = async (e) => {
     e.preventDefault();
+    
+    // --- NUEVO: Validación de la longitud de la contraseña ---
+    if (password.length < 6) {
+      toast.error('La contraseña debe tener al menos 6 caracteres.');
+      return;
+    }
+
     try {
       setLoading(true);
-      const { error } = await supabase.auth.signUp({ email, password });
-      if (error) throw error;
-      alert('¡Registro exitoso! Ahora puedes iniciar sesión.');
+      const { data, error } = await supabase.auth.signUp({ email, password });
+      
+      if (error) {
+        // Manejar errores específicos de Supabase
+        if (error.message.includes('User already registered')) {
+            toast.error('Este email ya está registrado. Por favor, inicia sesión.');
+        } else {
+            // Lanzar otros errores para que sean capturados por el bloque catch
+            throw error;
+        }
+      } else if (data.user && data.user.identities && data.user.identities.length === 0) {
+        // Este caso suele ocurrir si el usuario existe pero no ha confirmado su email.
+        toast.info('Este email ya está registrado. Revisa tu bandeja de entrada para confirmar la cuenta.');
+      } else {
+        // Mensaje de éxito claro para el usuario.
+        toast.success('¡Registro exitoso! Revisa tu email para confirmar tu cuenta y poder iniciar sesión.');
+      }
+
     } catch (error) {
-      alert(error.error_description || error.message);
+      // Mensaje genérico para cualquier otro error no manejado.
+      toast.error(error.error_description || error.message);
     } finally {
       setLoading(false);
     }
