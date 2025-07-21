@@ -1,12 +1,12 @@
 import React from 'react';
 import * as XLSX from 'xlsx';
 import { toast } from 'react-toastify';
+import RepartoRow from './RepartoRow';
 
-function RepartosTable({ repartos, loading, onClearRepartos }) {
+function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, onDeleteReparto }) {
 
   const handleExportExcel = () => {
     if (repartos.length === 0) {
-      // Reemplazamos el alert por una notificación
       toast.info('No hay repartos para exportar.');
       return;
     }
@@ -26,39 +26,49 @@ function RepartosTable({ repartos, loading, onClearRepartos }) {
   };
 
   return (
-    <div className="table-container">
-      <div className="table-actions">
-        <button className="btn btn-success" onClick={handleExportExcel}>📊 Exportar a Excel</button>
-        <button className="btn btn-danger" onClick={onClearRepartos}>🗑️ Vaciar Todo</button>
+    <div className="overflow-x-auto">
+      <div className="flex gap-4 mb-5">
+        <button 
+          className="px-5 py-2 border-none rounded-lg text-sm font-semibold cursor-pointer transition-transform duration-200 uppercase tracking-wider text-white bg-gradient-to-r from-green-500 to-teal-500 hover:scale-105" 
+          onClick={handleExportExcel}>
+            📊 Exportar a Excel
+        </button>
+        <button 
+          className="px-5 py-2 border-none rounded-lg text-sm font-semibold cursor-pointer transition-transform duration-200 uppercase tracking-wider text-white bg-gradient-to-r from-red-500 to-orange-500 hover:scale-105" 
+          onClick={onClearRepartos}>
+            🗑️ Vaciar Todo
+        </button>
       </div>
-      <table>
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Destino</th>
-            <th>Dirección</th>
-            <th>Horarios</th>
-            <th>Bultos</th>
-          </tr>
-        </thead>
-        <tbody>
-          {loading ? (
-            <tr><td colSpan="5" className="loading-state">Cargando...</td></tr>
-          ) : repartos.length > 0 ? (
-            repartos.map(reparto => (
-              <tr key={reparto.id}>
-                <td>{reparto.id}</td>
-                <td>{reparto.destino}</td>
-                <td>{reparto.direccion}</td>
-                <td>{reparto.horarios}</td>
-                <td>{reparto.bultos}</td>
-              </tr>
-            ))
-          ) : (
-            <tr><td colSpan="5" className="empty-state">No hay repartos cargados.</td></tr>
-          )}
-        </tbody>
-      </table>
+      <div className="bg-white rounded-xl shadow-md overflow-hidden">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr>
+              <th className="p-4 text-left bg-gradient-to-r from-purple-600 to-indigo-600 text-white uppercase text-sm font-bold tracking-wider">ID</th>
+              <th className="p-4 text-left bg-gradient-to-r from-purple-600 to-indigo-600 text-white uppercase text-sm font-bold tracking-wider">Destino</th>
+              <th className="p-4 text-left bg-gradient-to-r from-purple-600 to-indigo-600 text-white uppercase text-sm font-bold tracking-wider">Dirección</th>
+              <th className="p-4 text-left bg-gradient-to-r from-purple-600 to-indigo-600 text-white uppercase text-sm font-bold tracking-wider">Horarios</th>
+              <th className="p-4 text-left bg-gradient-to-r from-purple-600 to-indigo-600 text-white uppercase text-sm font-bold tracking-wider">Bultos</th>
+              <th className="p-4 text-center bg-gradient-to-r from-purple-600 to-indigo-600 text-white uppercase text-sm font-bold tracking-wider">Acciones</th> 
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan="6" className="text-center p-10 text-gray-500">Cargando...</td></tr>
+            ) : repartos.length > 0 ? (
+              repartos.map(reparto => (
+                <RepartoRow 
+                  key={reparto.id} 
+                  reparto={reparto} 
+                  onUpdate={onUpdateReparto}
+                  onDelete={onDeleteReparto}
+                />
+              ))
+            ) : (
+              <tr><td colSpan="6" className="text-center p-10 text-gray-500">No hay repartos cargados.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

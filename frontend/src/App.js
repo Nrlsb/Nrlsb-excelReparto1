@@ -12,15 +12,22 @@ import RepartoForm from './components/RepartoForm';
 import RepartosTable from './components/RepartosTable';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import './App.css';
 
-// Componente para la confirmación personalizada
+// Componente para la confirmación personalizada con clases de Tailwind
 const ConfirmationToast = ({ closeToast, onConfirm, message }) => (
-  <div className="confirmation-toast">
-    <p>{message}</p>
-    <div>
-      <button className="btn btn-danger btn-small" onClick={() => { onConfirm(); closeToast(); }}>Sí</button>
-      <button className="btn btn-secondary btn-small" onClick={closeToast}>No</button>
+  <div>
+    <p className="mb-3 text-gray-700">{message}</p>
+    <div className="flex justify-end gap-3">
+      <button 
+        className="px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg shadow-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-75" 
+        onClick={() => { onConfirm(); closeToast(); }}>
+          Sí
+      </button>
+      <button 
+        className="px-4 py-2 text-sm font-semibold text-gray-700 bg-gray-200 rounded-lg shadow-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-75" 
+        onClick={closeToast}>
+          No
+      </button>
     </div>
   </div>
 );
@@ -47,7 +54,7 @@ function App() {
 
   useEffect(() => {
     fetchRepartos();
-
+    // Ya no importamos App.css
     const channel = supabase
       .channel('repartos_changes')
       .on(
@@ -98,9 +105,7 @@ function App() {
     };
 
     toast(<ConfirmationToast onConfirm={confirmDelete} message="¿Eliminar este reparto?" />, {
-      autoClose: false,
-      closeOnClick: false,
-      draggable: false,
+      autoClose: false, closeOnClick: false, draggable: false,
     });
   };
 
@@ -116,14 +121,12 @@ function App() {
     };
 
     toast(<ConfirmationToast onConfirm={confirmClear} message="¿Estás seguro de que deseas vaciar TODOS los repartos?" />, {
-      autoClose: false,
-      closeOnClick: false,
-      draggable: false,
+      autoClose: false, closeOnClick: false, draggable: false,
     });
   };
 
   return (
-    <div className="container">
+    <div className="bg-gradient-to-br from-purple-50 to-indigo-100 min-h-screen p-4 sm:p-8">
       <ToastContainer
         position="top-right"
         autoClose={3000}
@@ -135,18 +138,20 @@ function App() {
         draggable
         pauseOnHover
       />
-      <Header />
-      <main>
-        <RepartoForm onAddReparto={handleAddReparto} />
-        {error && <p className="error-message">{error}</p>}
-        <RepartosTable
-          repartos={repartos}
-          loading={loading}
-          onClearRepartos={handleClearRepartos}
-          onUpdateReparto={handleUpdateReparto}
-          onDeleteReparto={handleDeleteReparto}
-        />
-      </main>
+      <div className="max-w-7xl mx-auto bg-white/95 rounded-2xl shadow-xl p-6 sm:p-8 backdrop-blur-sm">
+        <Header />
+        <main>
+          <RepartoForm onAddReparto={handleAddReparto} />
+          {error && <p className="text-red-600 bg-red-100 border border-red-600 rounded-lg p-3 my-4">{error}</p>}
+          <RepartosTable
+            repartos={repartos}
+            loading={loading}
+            onClearRepartos={handleClearRepartos}
+            onUpdateReparto={handleUpdateReparto}
+            onDeleteReparto={handleDeleteReparto}
+          />
+        </main>
+      </div>
     </div>
   );
 }
