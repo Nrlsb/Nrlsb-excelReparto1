@@ -56,7 +56,11 @@ export const exportRepartos = async (req, res) => {
         if (error) throw error;
 
         const workbook = new ExcelJS.Workbook();
-        const templatePath = path.join(__dirname, '..', 'templates', 'PLANILLA PARA REPARTOS-1.xlsx');
+        
+        // --- CORRECCIÓN DE RUTA ---
+        // La ruta ahora sube dos niveles desde 'controllers' para llegar a la raíz de 'backend'
+        const templatePath = path.join(__dirname, '..', '..', 'templates', 'PLANILLA PARA REPARTOS-1.xlsx');
+        
         await workbook.xlsx.readFile(templatePath);
 
         const worksheet = workbook.getWorksheet(1);

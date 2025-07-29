@@ -4,7 +4,7 @@ import Auth from './components/Auth';
 import Header from './components/Header';
 import RepartoForm from './components/RepartoForm';
 import RepartosTable from './components/RepartosTable';
-import api from './services/api'; // <-- CORRECCIÓN: Se importa sin las llaves {}
+import api from './services/api';
 
 function App() {
   const [session, setSession] = useState(null);
@@ -96,8 +96,9 @@ function App() {
             <Header session={session} />
             <RepartoForm session={session} onNewReparto={fetchRepartos} />
             
+            {/* --- CORRECCIÓN: Contenedor de botones unificado --- */}
             <div className="export-container" style={{ margin: '20px 0' }}>
-                <button onClick={handleExport} className="button block primary">
+                <button onClick={handleExport} className="button block primary" style={{backgroundColor: '#28a745', color: 'white', padding: '10px 15px', border: 'none', borderRadius: '5px', cursor: 'pointer'}}>
                     Exportar a Excel
                 </button>
             </div>
