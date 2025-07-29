@@ -4,8 +4,7 @@ import Auth from './components/Auth';
 import Header from './components/Header';
 import RepartoForm from './components/RepartoForm';
 import RepartosTable from './components/RepartosTable';
-import { api } from './services/api';
-// import './App.css'; // <-- LÍNEA ELIMINADA
+import api from './services/api'; // <-- CORRECCIÓN: Se importa sin las llaves {}
 
 function App() {
   const [session, setSession] = useState(null);
