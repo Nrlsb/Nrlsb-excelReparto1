@@ -1,33 +1,32 @@
-// src/server.js
-// --- ARCHIVO MODIFICADO ---
-import express from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import repartoRoutes from './routes/repartoRoutes.js';
-import profileRoutes from './routes/profileRoutes.js'; // 1. Importar nuevas rutas
+// Cargar variables de entorno
+require('dotenv').config();
 
-dotenv.config();
+// Usar require en lugar de import
+const express = require('express');
+const cors = require('cors');
+const repartoRoutes = require('./routes/repartoRoutes');
+const profileRoutes = require('./routes/profileRoutes');
 
+// Crear la aplicación de express
 const app = express();
-const PORT = process.env.PORT || 3001;
 
-const frontendURL = "https://nrlsb-excel-reparto1.vercel.app"; 
+// Middleware
+app.use(cors());
+app.use(express.json()); // Para parsear el body de las peticiones como JSON
 
-const corsOptions = {
-  origin: [frontendURL, 'http://localhost:3000'], // Permitir también localhost
-  optionsSuccessStatus: 200
-};
+// Rutas de la API
+app.use('/api/repartos', repartoRoutes);
+app.use('/api/profile', profileRoutes);
 
-app.use(cors(corsOptions));
-app.use(express.json());
-
+// Ruta de bienvenida para probar que el servidor funciona
 app.get('/', (req, res) => {
-  res.send('API de Gestión de Repartos funcionando correctamente!');
+  res.send('API de Repartos funcionando correctamente.');
 });
 
-app.use('/api', repartoRoutes);
-app.use('/api', profileRoutes); // 2. Usar las nuevas rutas de perfil
+// Puerto
+const PORT = process.env.PORT || 3001;
 
+// Iniciar el servidor
 app.listen(PORT, () => {
-  console.log(`Servidor escuchando en http://localhost:${PORT}`);
+  console.log(`Servidor corriendo en el puerto ${PORT}`);
 });

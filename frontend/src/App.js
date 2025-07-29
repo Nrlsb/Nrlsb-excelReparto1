@@ -5,7 +5,7 @@ import Header from './components/Header';
 import RepartoForm from './components/RepartoForm';
 import RepartosTable from './components/RepartosTable';
 import { api } from './services/api';
-import './App.css';
+// import './App.css'; // <-- LÍNEA ELIMINADA
 
 function App() {
   const [session, setSession] = useState(null);
