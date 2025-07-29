@@ -1,153 +1,140 @@
-// src/controllers/repartoController.js
-// --- ARCHIVO MODIFICADO PARA ROL DE ADMIN ---
+const supabase = require('../config/supabaseClient');
+const ExcelJS = require('exceljs');
+const path = require('path');
 
-import { supabase, supabaseAdmin } from '../config/supabaseClient.js';
-import dotenv from 'dotenv';
+// Obtener todos los repartos
+const getRepartos = async (req, res) => {
+    try {
+        const { data, error } = await supabase
+            .from('repartos')
+            .select('*')
+            .order('created_at', { ascending: false });
 
-dotenv.config();
-
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
-
-// --- NUEVO: Función para determinar si un usuario es administrador ---
-const isAdmin = (user) => {
-  return user && user.email === ADMIN_EMAIL;
+        if (error) throw error;
+        res.status(200).json(data);
+    } catch (err) {
+        res.status(500).json({ error: 'No se pudieron obtener los repartos.', details: err.message });
+    }
 };
 
-// Controlador para obtener repartos
-export const getRepartos = async (req, res) => {
-  try {
-    let query;
-    // Si el usuario es admin, usa el cliente de admin para obtener TODOS los repartos
-    if (isAdmin(req.user)) {
-      console.log('Usuario admin detectado. Obteniendo todos los repartos.');
-      query = supabaseAdmin
-        .from('repartos')
-        .select('*')
-        .order('id', { ascending: true });
-    } else {
-      // Si es un usuario normal, usa el cliente estándar y filtra por su ID
-      console.log('Usuario normal detectado. Obteniendo sus repartos.');
-      query = supabase
-        .from('repartos')
-        .select('*')
-        .eq('user_id', req.user.id)
-        .order('id', { ascending: true });
+// Crear un nuevo reparto
+const createReparto = async (req, res) => {
+    try {
+        const { data, error } = await supabase
+            .from('repartos')
+            .insert([req.body])
+            .select();
+
+        if (error) throw error;
+        res.status(201).json(data[0]);
+    } catch (err) {
+        res.status(500).json({ error: 'No se pudo crear el reparto.', details: err.message });
     }
-
-    const { data, error } = await query;
-    if (error) throw error;
-
-    res.status(200).json(data);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
 };
 
-// Controlador para agregar un nuevo reparto (sin cambios, ya que siempre se asocia al usuario que lo crea)
-export const addReparto = async (req, res) => {
-  const { destino, direccion, horarios, bultos, agregado_por } = req.body;
+// Actualizar un reparto
+const updateReparto = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { data, error } = await supabase
+            .from('repartos')
+            .update(req.body)
+            .eq('id', id)
+            .select();
 
-  if (!destino || !direccion || !bultos) {
-    return res.status(400).json({ error: 'Los campos destino, direccion y bultos son obligatorios.' });
-  }
-
-  try {
-    const { data, error } = await supabase
-      .from('repartos')
-      .insert([{ 
-        destino, 
-        direccion, 
-        horarios, 
-        bultos, 
-        agregado_por,
-        user_id: req.user.id // Asociamos el reparto con el ID del usuario
-      }])
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    res.status(201).json(data);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+        if (error) throw error;
+        if (data.length === 0) return res.status(404).json({ error: 'Reparto no encontrado.' });
+        res.status(200).json(data[0]);
+    } catch (err) {
+        res.status(500).json({ error: 'No se pudo actualizar el reparto.', details: err.message });
+    }
 };
 
-// Controlador para actualizar un reparto existente
-export const updateReparto = async (req, res) => {
-  const { id } = req.params;
-  const { destino, direccion, horarios, bultos } = req.body;
+// Eliminar un reparto
+const deleteReparto = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { error } = await supabase
+            .from('repartos')
+            .delete()
+            .eq('id', id);
 
-  try {
-    let query = supabase
-      .from('repartos')
-      .update({ destino, direccion, horarios, bultos })
-      .eq('id', id);
-
-    // El admin puede editar cualquier reparto, el usuario normal solo los suyos.
-    if (!isAdmin(req.user)) {
-      query = query.eq('user_id', req.user.id);
+        if (error) throw error;
+        res.status(204).send();
+    } catch (err) {
+        res.status(500).json({ error: 'No se pudo eliminar el reparto.', details: err.message });
     }
-    
-    const { data, error } = await query.select().single();
-
-    if (error) throw error;
-    if (!data) return res.status(404).json({ error: 'Reparto no encontrado o no tienes permiso para editarlo.' });
-
-    res.status(200).json(data);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
 };
 
-// Controlador para eliminar un reparto individual
-export const deleteReparto = async (req, res) => {
-  const { id } = req.params;
+// --- NUEVA FUNCIÓN PARA EXPORTAR ---
+const exportRepartos = async (req, res) => {
+    try {
+        // 1. Obtener los datos de repartos desde Supabase
+        const { data, error } = await supabase
+            .from('repartos')
+            .select('*')
+            .order('created_at', { ascending: false });
 
-  try {
-    let query = supabase
-      .from('repartos')
-      .delete()
-      .eq('id', id);
+        if (error) throw error;
 
-    // El admin puede eliminar cualquier reparto, el usuario normal solo los suyos.
-    if (!isAdmin(req.user)) {
-      query = query.eq('user_id', req.user.id);
+        // 2. Cargar la plantilla de Excel
+        const workbook = new ExcelJS.Workbook();
+        // La ruta apunta a la carpeta 'templates' que crearás en 'backend'
+        const templatePath = path.join(__dirname, '..', 'templates', 'PLANILLA PARA REPARTOS-1.xlsx');
+        await workbook.xlsx.readFile(templatePath);
+
+        // 3. Acceder a la primera hoja de cálculo
+        const worksheet = workbook.getWorksheet(1);
+
+        // 4. Insertar los datos en la planilla (comenzando en la fila 5)
+        const startingRow = 5;
+        data.forEach((reparto, index) => {
+            const currentRow = startingRow + index;
+            const row = worksheet.getRow(currentRow);
+
+            row.getCell('A').value = reparto.direccion;
+            row.getCell('B').value = reparto.localidad;
+            row.getCell('C').value = reparto.franja_horaria;
+            row.getCell('D').value = reparto.valor;
+            row.getCell('E').value = reparto.estado;
+            row.getCell('F').value = reparto.id_reparto;
+
+            // Para asegurar que las celdas nuevas tengan el mismo estilo que la fila 5 (opcional pero recomendado)
+            const templateRow = worksheet.getRow(startingRow);
+            row.height = templateRow.height;
+            for(let i = 1; i <= 6; i++) {
+                row.getCell(i).style = templateRow.getCell(i).style;
+            }
+        });
+        
+        // Opcional: Escribir la fecha actual en la celda C2
+        worksheet.getCell('C2').value = new Date();
+
+        // 5. Configurar la respuesta para la descarga
+        res.setHeader(
+            'Content-Type',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        );
+        res.setHeader(
+            'Content-Disposition',
+            `attachment; filename="Repartos-${new Date().toISOString().slice(0, 10)}.xlsx"`
+        );
+
+        // 6. Enviar el archivo al cliente
+        await workbook.xlsx.write(res);
+        res.end();
+
+    } catch (err) {
+        console.error('Error al exportar:', err);
+        res.status(500).json({ error: 'No se pudo generar el archivo Excel.', details: err.message });
     }
-
-    const { error, count } = await query;
-
-    if (error) throw error;
-    if (count === 0 && !isAdmin(req.user)) {
-        // Este caso puede darse si un usuario intenta borrar un reparto que no le pertenece.
-        return res.status(404).json({ error: 'Reparto no encontrado o no tienes permiso para eliminarlo.' });
-    }
-
-
-    res.status(200).json({ message: 'Reparto eliminado correctamente.' });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
 };
 
-// Controlador para eliminar todos los repartos
-export const clearRepartos = async (req, res) => {
-  try {
-    let query;
-    
-    // El admin borra TODOS los repartos de la tabla. El usuario normal solo los suyos.
-    if (isAdmin(req.user)) {
-      query = supabaseAdmin.from('repartos').delete().neq('id', 0); // .neq es una forma de decir "donde id no sea 0", para borrar todo
-    } else {
-      query = supabase.from('repartos').delete().eq('user_id', req.user.id);
-    }
 
-    const { error } = await query;
-
-    if (error) throw error;
-
-    res.status(200).json({ message: 'Repartos eliminados correctamente.' });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+module.exports = {
+    getRepartos,
+    createReparto,
+    updateReparto,
+    deleteReparto,
+    exportRepartos // Asegúrate de exportar la nueva función
 };
