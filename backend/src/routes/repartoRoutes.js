@@ -6,18 +6,24 @@ import {
   updateReparto, 
   deleteReparto, 
   exportRepartos,
-  clearAllRepartos // Importar la nueva función
+  clearAllRepartos
 } from '../controllers/repartoController.js';
 import authMiddleware from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
+// Rutas generales
 router.get('/', authMiddleware, getRepartos);
 router.post('/', authMiddleware, createReparto);
+router.get('/export', authMiddleware, exportRepartos);
+
+// --- CORRECCIÓN DE ORDEN ---
+// La ruta específica '/all' debe declararse ANTES de la ruta genérica con parámetros como '/:id'
+// para asegurar que sea detectada correctamente por Express.
+router.delete('/all', authMiddleware, clearAllRepartos);
+
+// Rutas específicas por ID
 router.put('/:id', authMiddleware, updateReparto);
 router.delete('/:id', authMiddleware, deleteReparto);
-router.get('/export', authMiddleware, exportRepartos);
-// Nueva ruta para vaciar los repartos
-router.delete('/all', authMiddleware, clearAllRepartos);
 
 export default router;
