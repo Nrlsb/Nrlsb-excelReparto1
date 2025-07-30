@@ -10,16 +10,15 @@ import Header from './components/Header';
 import Account from './components/Account';
 import RepartoForm from './components/RepartoForm';
 import RepartosTable from './components/RepartosTable';
-import ConfirmModal from './components/ConfirmModal'; // --- 1. IMPORTAR EL NUEVO COMPONENTE ---
+import ConfirmModal from './components/ConfirmModal';
 
 function App() {
   const [session, setSession] = useState(null);
   const [repartos, setRepartos] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [userRole, setUserRole] = useState('user'); // Estado para el rol del usuario
   const [showAccountModal, setShowAccountModal] = useState(false);
 
-  // --- 2. ESTADO PARA EL MODAL DE CONFIRMACIÓN ---
   const [confirmState, setConfirmState] = useState({
     isOpen: false,
     title: '',
@@ -27,33 +26,56 @@ function App() {
     onConfirm: () => {},
   });
 
-  // --- Efecto para manejar la sesión del usuario ---
+  // --- Efecto para manejar la sesión y obtener el rol ---
   useEffect(() => {
-    const getSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+    // Función para configurar la sesión y obtener datos del usuario
+    const setupSession = async (session) => {
       setSession(session);
       if (session) {
         api.defaults.headers.common['Authorization'] = `Bearer ${session.access_token}`;
-        setIsAdmin(session.user.email === process.env.REACT_APP_ADMIN_EMAIL);
+        
+        // Obtenemos el perfil para saber el rol del usuario
+        try {
+          const { data: profile, error } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', session.user.id)
+            .single();
+          
+          if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+            throw error;
+          }
+
+          if (profile) {
+            setUserRole(profile.role);
+          } else {
+            // Si el perfil no existe aún (latencia del trigger), reintentamos
+            setTimeout(() => setupSession(session), 1500);
+            return;
+          }
+        } catch (e) {
+            console.error("Error al obtener el perfil del usuario:", e);
+            setUserRole('user'); // Fallback a rol básico por seguridad
+        }
+        
         fetchRepartos();
       } else {
+        // Limpiar estado al cerrar sesión
+        delete api.defaults.headers.common['Authorization'];
+        setRepartos([]);
+        setUserRole('user');
         setLoading(false);
       }
     };
-    getSession();
 
+    // Obtener sesión al cargar la app
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setupSession(session);
+    });
+
+    // Escuchar cambios en la autenticación
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      if (session) {
-        api.defaults.headers.common['Authorization'] = `Bearer ${session.access_token}`;
-        setIsAdmin(session.user.email === process.env.REACT_APP_ADMIN_EMAIL);
-        fetchRepartos();
-      } else {
-        delete api.defaults.headers.common['Authorization'];
-        setRepartos([]);
-        setIsAdmin(false);
-        setLoading(false);
-      }
+      setupSession(session);
     });
 
     return () => subscription.unsubscribe();
@@ -67,6 +89,7 @@ function App() {
       .channel('repartos_realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'repartos' }, (payload) => {
         console.log('Change received!', payload);
+        // Volvemos a cargar los repartos para reflejar el cambio
         fetchRepartos();
       })
       .subscribe();
@@ -112,7 +135,6 @@ function App() {
     }
   };
 
-  // --- 3. LÓGICA MODIFICADA PARA USAR EL MODAL ---
   const handleDeleteReparto = (id) => {
     setConfirmState({
       isOpen: true,
@@ -131,8 +153,11 @@ function App() {
     });
   };
   
+  // Variable para saber si el usuario tiene permisos elevados
+  const hasElevatedPermissions = userRole === 'admin' || userRole === 'especial';
+
   const handleClearRepartos = () => {
-    const message = isAdmin 
+    const message = hasElevatedPermissions
       ? '¿Estás seguro de que quieres eliminar TODOS los repartos de la base de datos? Esta acción es irreversible.'
       : '¿Estás seguro de que quieres eliminar TODOS TUS repartos?';
 
@@ -156,6 +181,7 @@ function App() {
   const handleUpdateProfile = async (username) => {
     try {
       await api.put('/profile', { username });
+      // Forzamos la actualización de la sesión para obtener los nuevos metadatos
       await supabase.auth.refreshSession();
       toast.success('Perfil actualizado.');
       setShowAccountModal(false);
@@ -185,7 +211,7 @@ function App() {
                 onUpdateReparto={handleUpdateReparto}
                 onDeleteReparto={handleDeleteReparto}
                 onClearRepartos={handleClearRepartos}
-                isAdmin={isAdmin}
+                isAdmin={hasElevatedPermissions} // Pasamos la nueva variable de permisos
                 session={session}
               />
             </main>
@@ -199,7 +225,6 @@ function App() {
           onSave={handleUpdateProfile}
         />
       )}
-      {/* --- 4. RENDERIZAR EL MODAL DE CONFIRMACIÓN --- */}
       <ConfirmModal
         isOpen={confirmState.isOpen}
         onClose={closeConfirmModal}

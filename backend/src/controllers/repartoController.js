@@ -7,15 +7,37 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+/**
+ * Obtiene el rol de un usuario desde la tabla de perfiles.
+ * @param {string} userId - El UUID del usuario.
+ * @returns {Promise<string>} El rol del usuario (ej. 'admin', 'especial', 'user').
+ */
+async function getUserRole(userId) {
+    const { data, error } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .single();
+
+    if (error || !data) {
+        console.error(`No se pudo obtener el perfil para el usuario ${userId}:`, error?.message);
+        // Si no se encuentra un perfil, se asume el rol con menos privilegios.
+        return 'user';
+    }
+    return data.role;
+}
+
 export const getRepartos = async (req, res) => {
     try {
-        const userEmail = req.user.email;
-        const isAdmin = userEmail === process.env.ADMIN_EMAIL;
-        
+        const userId = req.user.id;
+        const userRole = await getUserRole(userId);
+
         let query = supabase.from('repartos').select('*');
 
-        // Si no es admin, la política RLS de Supabase ya filtra los resultados.
-        // Si es admin, el cliente de Supabase usa la service_key que salta RLS.
+        // Si el rol NO es admin o especial, filtramos los repartos por el ID del usuario.
+        if (userRole !== 'admin' && userRole !== 'especial') {
+            query = query.eq('user_id', userId);
+        }
         
         const { data, error } = await query.order('id', { ascending: true });
 
@@ -39,11 +61,10 @@ export const createReparto = async (req, res) => {
 export const updateReparto = async (req, res) => {
     try {
         const { id } = req.params;
-        const userEmail = req.user.email;
-        const isAdmin = userEmail === process.env.ADMIN_EMAIL;
+        const userRole = await getUserRole(req.user.id);
 
-        // Aunque usamos la service_key, añadimos una capa de seguridad en la lógica.
-        if (!isAdmin) {
+        // Si no es admin o especial, verificamos que sea el dueño del reparto.
+        if (userRole !== 'admin' && userRole !== 'especial') {
             const { data: existingReparto, error: fetchError } = await supabase
                 .from('repartos')
                 .select('user_id')
@@ -71,10 +92,9 @@ export const updateReparto = async (req, res) => {
 export const deleteReparto = async (req, res) => {
     try {
         const { id } = req.params;
-        const userEmail = req.user.email;
-        const isAdmin = userEmail === process.env.ADMIN_EMAIL;
+        const userRole = await getUserRole(req.user.id);
 
-        if (!isAdmin) {
+        if (userRole !== 'admin' && userRole !== 'especial') {
             const { data: existingReparto, error: fetchError } = await supabase
                 .from('repartos')
                 .select('user_id')
@@ -98,16 +118,14 @@ export const deleteReparto = async (req, res) => {
     }
 };
 
-// --- NUEVA FUNCIÓN ---
 export const clearAllRepartos = async (req, res) => {
     try {
-        const userEmail = req.user.email;
-        const isAdmin = userEmail === process.env.ADMIN_EMAIL;
+        const userRole = await getUserRole(req.user.id);
 
         let query = supabase.from('repartos').delete();
 
-        if (isAdmin) {
-            // Admin borra todos los repartos (usamos un filtro que siempre es verdad)
+        if (userRole === 'admin' || userRole === 'especial') {
+            // Admin o especial borran todos los repartos
             query = query.neq('id', 0); 
         } else {
             // Usuario normal borra solo los suyos
@@ -126,7 +144,17 @@ export const clearAllRepartos = async (req, res) => {
 
 export const exportRepartos = async (req, res) => {
     try {
-        const { data, error } = await supabase.from('repartos').select('*').order('created_at', { ascending: false });
+        // La lógica de exportación también debe respetar los roles
+        const userId = req.user.id;
+        const userRole = await getUserRole(userId);
+
+        let query = supabase.from('repartos').select('*');
+
+        if (userRole !== 'admin' && userRole !== 'especial') {
+            query = query.eq('user_id', userId);
+        }
+
+        const { data, error } = await query.order('created_at', { ascending: false });
         if (error) throw error;
 
         const workbook = new ExcelJS.Workbook();
