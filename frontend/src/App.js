@@ -10,6 +10,7 @@ import Header from './components/Header';
 import Account from './components/Account';
 import RepartoForm from './components/RepartoForm';
 import RepartosTable from './components/RepartosTable';
+import ConfirmModal from './components/ConfirmModal'; // --- 1. IMPORTAR EL NUEVO COMPONENTE ---
 
 function App() {
   const [session, setSession] = useState(null);
@@ -17,6 +18,14 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState(false);
+
+  // --- 2. ESTADO PARA EL MODAL DE CONFIRMACIÓN ---
+  const [confirmState, setConfirmState] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
 
   // --- Efecto para manejar la sesión del usuario ---
   useEffect(() => {
@@ -58,7 +67,7 @@ function App() {
       .channel('repartos_realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'repartos' }, (payload) => {
         console.log('Change received!', payload);
-        fetchRepartos(); // Vuelve a cargar los datos para mantener todo sincronizado
+        fetchRepartos();
       })
       .subscribe();
 
@@ -67,7 +76,6 @@ function App() {
     };
   }, [session]);
 
-  // --- Funciones para interactuar con la API ---
   const fetchRepartos = async () => {
     setLoading(true);
     try {
@@ -88,7 +96,6 @@ function App() {
         user_id: session.user.id,
       });
       toast.success('Reparto agregado con éxito.');
-      // El estado se actualizará automáticamente gracias a la suscripción en tiempo real
     } catch (error) {
       toast.error('No se pudo agregar el reparto.');
       console.error('Error adding reparto:', error);
@@ -105,38 +112,50 @@ function App() {
     }
   };
 
-  const handleDeleteReparto = async (id) => {
-    if (window.confirm(`¿Estás seguro de que quieres eliminar el reparto #${id}?`)) {
-      try {
-        await api.delete(`/repartos/${id}`);
-        toast.info(`Reparto #${id} eliminado.`);
-      } catch (error) {
-        toast.error('No se pudo eliminar el reparto.');
-        console.error('Error deleting reparto:', error);
-      }
-    }
+  // --- 3. LÓGICA MODIFICADA PARA USAR EL MODAL ---
+  const handleDeleteReparto = (id) => {
+    setConfirmState({
+      isOpen: true,
+      title: 'Confirmar Eliminación',
+      message: `¿Estás seguro de que quieres eliminar el reparto #${id}?`,
+      onConfirm: async () => {
+        try {
+          await api.delete(`/repartos/${id}`);
+          toast.info(`Reparto #${id} eliminado.`);
+        } catch (error) {
+          toast.error('No se pudo eliminar el reparto.');
+          console.error('Error deleting reparto:', error);
+        }
+        closeConfirmModal();
+      },
+    });
   };
   
-  const handleClearRepartos = async () => {
+  const handleClearRepartos = () => {
     const message = isAdmin 
       ? '¿Estás seguro de que quieres eliminar TODOS los repartos de la base de datos? Esta acción es irreversible.'
       : '¿Estás seguro de que quieres eliminar TODOS TUS repartos?';
 
-    if (window.confirm(message)) {
-      try {
-        await api.delete('/repartos/all');
-        toast.warn('Se han eliminado los repartos.');
-      } catch (error) {
-        toast.error('No se pudieron eliminar los repartos.');
-        console.error('Error clearing repartos:', error);
-      }
-    }
+    setConfirmState({
+      isOpen: true,
+      title: 'Confirmar Vaciado',
+      message: message,
+      onConfirm: async () => {
+        try {
+          await api.delete('/repartos/all');
+          toast.warn('Se han eliminado los repartos.');
+        } catch (error) {
+          toast.error('No se pudieron eliminar los repartos.');
+          console.error('Error clearing repartos:', error);
+        }
+        closeConfirmModal();
+      },
+    });
   };
 
   const handleUpdateProfile = async (username) => {
     try {
       await api.put('/profile', { username });
-      // Refresca la sesión para obtener los nuevos metadatos del usuario
       await supabase.auth.refreshSession();
       toast.success('Perfil actualizado.');
       setShowAccountModal(false);
@@ -144,6 +163,10 @@ function App() {
       toast.error('No se pudo actualizar el perfil.');
       console.error('Error updating profile:', error);
     }
+  };
+
+  const closeConfirmModal = () => {
+    setConfirmState({ isOpen: false, title: '', message: '', onConfirm: () => {} });
   };
 
   return (
@@ -163,7 +186,7 @@ function App() {
                 onDeleteReparto={handleDeleteReparto}
                 onClearRepartos={handleClearRepartos}
                 isAdmin={isAdmin}
-                session={session} // --- ¡CORRECCIÓN AQUÍ! ---
+                session={session}
               />
             </main>
           </div>
@@ -176,6 +199,15 @@ function App() {
           onSave={handleUpdateProfile}
         />
       )}
+      {/* --- 4. RENDERIZAR EL MODAL DE CONFIRMACIÓN --- */}
+      <ConfirmModal
+        isOpen={confirmState.isOpen}
+        onClose={closeConfirmModal}
+        onConfirm={confirmState.onConfirm}
+        title={confirmState.title}
+      >
+        {confirmState.message}
+      </ConfirmModal>
       <ToastContainer position="bottom-right" autoClose={3000} hideProgressBar={false} />
     </>
   );
