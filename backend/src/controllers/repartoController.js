@@ -56,9 +56,6 @@ export const exportRepartos = async (req, res) => {
         if (error) throw error;
 
         const workbook = new ExcelJS.Workbook();
-        
-        // --- CORRECCIÓN DE RUTA ---
-        // La ruta ahora sube dos niveles desde 'controllers' para llegar a la raíz de 'backend'
         const templatePath = path.join(__dirname, '..', '..', 'templates', 'PLANILLA PARA REPARTOS-1.xlsx');
         
         await workbook.xlsx.readFile(templatePath);
@@ -68,20 +65,24 @@ export const exportRepartos = async (req, res) => {
         data.forEach((reparto, index) => {
             const currentRow = startingRow + index;
             const row = worksheet.getRow(currentRow);
-            row.getCell('A').value = reparto.direccion;
-            row.getCell('B').value = reparto.localidad;
-            row.getCell('C').value = reparto.franja_horaria;
-            row.getCell('D').value = reparto.valor;
-            row.getCell('E').value = reparto.estado;
-            row.getCell('F').value = reparto.id_reparto;
+
+            // --- CORRECCIÓN EN EL MAPEO DE DATOS ---
+            // Se ajustan los campos de la base de datos a las columnas correctas del Excel.
+            row.getCell('A').value = index + 1;                // Columna N°
+            row.getCell('B').value = reparto.destino;          // Columna Destino
+            row.getCell('C').value = reparto.direccion;        // Columna Dirección
+            row.getCell('D').value = reparto.horarios;         // Columna Horarios de entrega
+            row.getCell('E').value = reparto.bultos;           // Columna Cantidad de Bultos
+            
+            // Se copian los estilos de la primera fila de datos para mantener el formato
             const templateRow = worksheet.getRow(startingRow);
             row.height = templateRow.height;
-            for(let i = 1; i <= 6; i++) {
+            for(let i = 1; i <= 5; i++) { // Se itera hasta la columna E (5)
                 row.getCell(i).style = templateRow.getCell(i).style;
             }
         });
         
-        worksheet.getCell('C2').value = new Date();
+        worksheet.getCell('C2').value = new Date(); // Pone la fecha actual en la celda C2
 
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', `attachment; filename="Repartos-${new Date().toISOString().slice(0, 10)}.xlsx"`);
