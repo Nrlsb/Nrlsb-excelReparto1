@@ -163,6 +163,7 @@ function App() {
                 onDeleteReparto={handleDeleteReparto}
                 onClearRepartos={handleClearRepartos}
                 isAdmin={isAdmin}
+                session={session} // --- ¡CORRECCIÓN AQUÍ! ---
               />
             </main>
           </div>
