@@ -96,7 +96,7 @@ function App() {
             <Header session={session} />
             <RepartoForm session={session} onNewReparto={fetchRepartos} />
             
-            {/* --- CORRECCIÓN: Contenedor de botones unificado --- */}
+            {/* --- CORRECCIÓN: Contenedor de botones unificado  --- */}
             <div className="export-container" style={{ margin: '20px 0' }}>
                 <button onClick={handleExport} className="button block primary" style={{backgroundColor: '#28a745', color: 'white', padding: '10px 15px', border: 'none', borderRadius: '5px', cursor: 'pointer'}}>
                     Exportar a Excel
