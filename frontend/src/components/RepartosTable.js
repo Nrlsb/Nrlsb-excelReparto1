@@ -2,13 +2,12 @@ import React, { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { toast } from 'react-toastify';
 import RepartoRow from './RepartoRow';
+import api from '../services/api'; // Importamos la instancia de api
 
-function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, onDeleteReparto, isAdmin }) {
-  // --- NUEVO: Estados para el ordenamiento ---
+function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, onDeleteReparto, isAdmin, session }) {
   const [sortKey, setSortKey] = useState('id');
   const [sortOrder, setSortOrder] = useState('asc');
 
-  // --- NUEVO: Lógica para ordenar los repartos ---
   const sortedRepartos = useMemo(() => {
     const sorted = [...repartos];
     if (sortKey) {
@@ -28,7 +27,6 @@ function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, on
     return sorted;
   }, [repartos, sortKey, sortOrder]);
 
-  // --- NUEVO: Función para manejar el clic en las cabeceras ---
   const handleSort = (key) => {
     if (sortKey === key) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -38,7 +36,6 @@ function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, on
     }
   };
 
-  // --- NUEVO: Componente para las cabeceras de la tabla ---
   const SortableHeader = ({ columnKey, children }) => {
     const isSorted = sortKey === columnKey;
     const arrow = isSorted ? (sortOrder === 'asc' ? ' ▲' : ' ▼') : '';
@@ -52,7 +49,7 @@ function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, on
     );
   };
 
-  const handleExportExcel = () => {
+  const handleSimpleExportExcel = () => {
     if (sortedRepartos.length === 0) {
       toast.info('No hay repartos para exportar.');
       return;
@@ -78,15 +75,59 @@ function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, on
     XLSX.writeFile(wb, "repartos.xlsx");
   };
 
-  const colSpan = isAdmin ? 8 : 7;
+  // --- NUEVA FUNCIÓN para exportar con la plantilla del backend ---
+  const handleTemplateExport = async () => {
+    if (!session) {
+        toast.error("Debes iniciar sesión para exportar.");
+        return;
+    }
+    try {
+        const response = await api.get('/repartos/export', {
+            responseType: 'blob', // Importante para manejar la respuesta como un archivo
+        });
+
+        const disposition = response.headers['content-disposition'];
+        let filename = 'repartos.xlsx';
+        if (disposition && disposition.indexOf('attachment') !== -1) {
+            const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+            const matches = filenameRegex.exec(disposition);
+            if (matches != null && matches[1]) {
+                filename = matches[1].replace(/['"]/g, '');
+            }
+        }
+        
+        const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+        toast.success('Exportación con plantilla exitosa.');
+
+    } catch (error) {
+        console.error("Error al exportar a Excel con plantilla:", error);
+        toast.error(`No se pudo exportar el archivo: ${error.message}`);
+    }
+  };
+
+  const colSpan = isAdmin ? 7 : 6;
 
   return (
     <div className="overflow-x-auto">
-      <div className="flex gap-4 mb-5">
+      <div className="flex flex-wrap gap-4 mb-5">
         <button 
           className="px-5 py-2 border-none rounded-lg text-sm font-semibold cursor-pointer transition-transform duration-200 uppercase tracking-wider text-white bg-gradient-to-r from-green-500 to-teal-500 hover:scale-105" 
-          onClick={handleExportExcel}>
+          onClick={handleSimpleExportExcel}>
             📊 Exportar a Excel
+        </button>
+        {/* --- BOTÓN RESTAURADO --- */}
+        <button 
+          className="px-5 py-2 border-none rounded-lg text-sm font-semibold cursor-pointer transition-transform duration-200 uppercase tracking-wider text-white bg-gradient-to-r from-blue-500 to-sky-500 hover:scale-105" 
+          onClick={handleTemplateExport}>
+            📋 Exportar con Plantilla
         </button>
         <button 
           className="px-5 py-2 border-none rounded-lg text-sm font-semibold cursor-pointer transition-transform duration-200 uppercase tracking-wider text-white bg-gradient-to-r from-red-500 to-orange-500 hover:scale-105" 
