@@ -1,15 +1,24 @@
+// backend/src/controllers/repartoController.js
 import supabase from '../config/supabaseClient.js';
 import ExcelJS from 'exceljs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-// Solución para __dirname en ES Modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export const getRepartos = async (req, res) => {
     try {
-        const { data, error } = await supabase.from('repartos').select('*').order('created_at', { ascending: false });
+        const userEmail = req.user.email;
+        const isAdmin = userEmail === process.env.ADMIN_EMAIL;
+        
+        let query = supabase.from('repartos').select('*');
+
+        // Si no es admin, la política RLS de Supabase ya filtra los resultados.
+        // Si es admin, el cliente de Supabase usa la service_key que salta RLS.
+        
+        const { data, error } = await query.order('id', { ascending: true });
+
         if (error) throw error;
         res.status(200).json(data);
     } catch (err) {
@@ -30,6 +39,26 @@ export const createReparto = async (req, res) => {
 export const updateReparto = async (req, res) => {
     try {
         const { id } = req.params;
+        const userEmail = req.user.email;
+        const isAdmin = userEmail === process.env.ADMIN_EMAIL;
+
+        // Aunque usamos la service_key, añadimos una capa de seguridad en la lógica.
+        if (!isAdmin) {
+            const { data: existingReparto, error: fetchError } = await supabase
+                .from('repartos')
+                .select('user_id')
+                .eq('id', id)
+                .single();
+
+            if (fetchError || !existingReparto) {
+                return res.status(404).json({ error: 'Reparto no encontrado.' });
+            }
+
+            if (existingReparto.user_id !== req.user.id) {
+                return res.status(403).json({ error: 'No tienes permiso para modificar este reparto.' });
+            }
+        }
+
         const { data, error } = await supabase.from('repartos').update(req.body).eq('id', id).select();
         if (error) throw error;
         if (data.length === 0) return res.status(404).json({ error: 'Reparto no encontrado.' });
@@ -42,6 +71,25 @@ export const updateReparto = async (req, res) => {
 export const deleteReparto = async (req, res) => {
     try {
         const { id } = req.params;
+        const userEmail = req.user.email;
+        const isAdmin = userEmail === process.env.ADMIN_EMAIL;
+
+        if (!isAdmin) {
+            const { data: existingReparto, error: fetchError } = await supabase
+                .from('repartos')
+                .select('user_id')
+                .eq('id', id)
+                .single();
+
+            if (fetchError || !existingReparto) {
+                return res.status(404).json({ error: 'Reparto no encontrado.' });
+            }
+
+            if (existingReparto.user_id !== req.user.id) {
+                return res.status(403).json({ error: 'No tienes permiso para eliminar este reparto.' });
+            }
+        }
+
         const { error } = await supabase.from('repartos').delete().eq('id', id);
         if (error) throw error;
         res.status(204).send();
@@ -49,6 +97,32 @@ export const deleteReparto = async (req, res) => {
         res.status(500).json({ error: 'No se pudo eliminar el reparto.', details: err.message });
     }
 };
+
+// --- NUEVA FUNCIÓN ---
+export const clearAllRepartos = async (req, res) => {
+    try {
+        const userEmail = req.user.email;
+        const isAdmin = userEmail === process.env.ADMIN_EMAIL;
+
+        let query = supabase.from('repartos').delete();
+
+        if (isAdmin) {
+            // Admin borra todos los repartos (usamos un filtro que siempre es verdad)
+            query = query.neq('id', 0); 
+        } else {
+            // Usuario normal borra solo los suyos
+            query = query.eq('user_id', req.user.id);
+        }
+
+        const { error } = await query;
+
+        if (error) throw error;
+        res.status(204).send();
+    } catch (err) {
+        res.status(500).json({ error: 'No se pudieron eliminar los repartos.', details: err.message });
+    }
+};
+
 
 export const exportRepartos = async (req, res) => {
     try {
@@ -66,23 +140,20 @@ export const exportRepartos = async (req, res) => {
             const currentRow = startingRow + index;
             const row = worksheet.getRow(currentRow);
 
-            // --- CORRECCIÓN EN EL MAPEO DE DATOS ---
-            // Se ajustan los campos de la base de datos a las columnas correctas del Excel.
-            row.getCell('A').value = index + 1;                // Columna N°
-            row.getCell('B').value = reparto.destino;          // Columna Destino
-            row.getCell('C').value = reparto.direccion;        // Columna Dirección
-            row.getCell('D').value = reparto.horarios;         // Columna Horarios de entrega
-            row.getCell('E').value = reparto.bultos;           // Columna Cantidad de Bultos
+            row.getCell('A').value = index + 1;
+            row.getCell('B').value = reparto.destino;
+            row.getCell('C').value = reparto.direccion;
+            row.getCell('D').value = reparto.horarios;
+            row.getCell('E').value = reparto.bultos;
             
-            // Se copian los estilos de la primera fila de datos para mantener el formato
             const templateRow = worksheet.getRow(startingRow);
             row.height = templateRow.height;
-            for(let i = 1; i <= 5; i++) { // Se itera hasta la columna E (5)
+            for(let i = 1; i <= 5; i++) {
                 row.getCell(i).style = templateRow.getCell(i).style;
             }
         });
         
-        worksheet.getCell('C2').value = new Date(); // Pone la fecha actual en la celda C2
+        worksheet.getCell('C2').value = new Date();
 
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', `attachment; filename="Repartos-${new Date().toISOString().slice(0, 10)}.xlsx"`);

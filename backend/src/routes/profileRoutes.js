@@ -1,6 +1,4 @@
-// src/routes/profileRoutes.js
-// --- ARCHIVO NUEVO ---
-
+// backend/src/routes/profileRoutes.js
 import { Router } from 'express';
 import { updateProfile } from '../controllers/profileController.js';
 import authMiddleware from '../middleware/authMiddleware.js';
@@ -11,6 +9,7 @@ const router = Router();
 router.use(authMiddleware);
 
 // PUT /api/profile -> Actualiza el perfil del usuario autenticado
-router.put('/profile', updateProfile);
+// Se corrige la ruta de '/profile' a '/' para que sea /api/profile
+router.put('/', updateProfile);
 
 export default router;

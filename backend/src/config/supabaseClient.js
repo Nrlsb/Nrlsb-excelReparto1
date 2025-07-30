@@ -1,11 +1,16 @@
+// backend/src/config/supabaseClient.js
 import { createClient } from '@supabase/supabase-js';
 import 'dotenv/config';
 
-// No es necesario cargar dotenv de nuevo si ya está en server.js, pero no hace daño.
 const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_ANON_KEY;
+// ¡IMPORTANTE! Usar la clave de servicio (service_role) en el backend para operaciones administrativas.
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+if (!supabaseUrl || !supabaseServiceKey) {
+  throw new Error("Las credenciales de Supabase (URL y SERVICE_KEY) para el backend no están en el archivo .env");
+}
 
-// Usar export default para que coincida con la sintaxis de import
+// Inicializa el cliente con la clave de servicio para poder saltar las políticas de RLS cuando sea necesario.
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
 export default supabase;
