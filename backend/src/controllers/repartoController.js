@@ -3,6 +3,7 @@ import supabase from '../config/supabaseClient.js';
 import ExcelJS from 'exceljs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import axios from 'axios'; // Importamos axios
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,11 +22,12 @@ async function getUserRole(userId) {
 
     if (error || !data) {
         console.error(`No se pudo obtener el perfil para el usuario ${userId}:`, error?.message);
-        // Si no se encuentra un perfil, se asume el rol con menos privilegios.
         return 'user';
     }
     return data.role;
 }
+
+// ... (las funciones getRepartos, createReparto, etc. permanecen iguales) ...
 
 export const getRepartos = async (req, res) => {
     try {
@@ -34,7 +36,6 @@ export const getRepartos = async (req, res) => {
 
         let query = supabase.from('repartos').select('*');
 
-        // Si el rol NO es admin o especial, filtramos los repartos por el ID del usuario.
         if (userRole !== 'admin' && userRole !== 'especial') {
             query = query.eq('user_id', userId);
         }
@@ -63,7 +64,6 @@ export const updateReparto = async (req, res) => {
         const { id } = req.params;
         const userRole = await getUserRole(req.user.id);
 
-        // Si no es admin o especial, verificamos que sea el dueño del reparto.
         if (userRole !== 'admin' && userRole !== 'especial') {
             const { data: existingReparto, error: fetchError } = await supabase
                 .from('repartos')
@@ -125,10 +125,8 @@ export const clearAllRepartos = async (req, res) => {
         let query = supabase.from('repartos').delete();
 
         if (userRole === 'admin' || userRole === 'especial') {
-            // Admin o especial borran todos los repartos
             query = query.neq('id', 0); 
         } else {
-            // Usuario normal borra solo los suyos
             query = query.eq('user_id', req.user.id);
         }
 
@@ -141,10 +139,8 @@ export const clearAllRepartos = async (req, res) => {
     }
 };
 
-
 export const exportRepartos = async (req, res) => {
     try {
-        // La lógica de exportación también debe respetar los roles
         const userId = req.user.id;
         const userRole = await getUserRole(userId);
 
@@ -191,5 +187,60 @@ export const exportRepartos = async (req, res) => {
     } catch (err) {
         console.error('Error al exportar:', err);
         res.status(500).json({ error: 'No se pudo generar el archivo Excel.', details: err.message });
+    }
+};
+
+// --- NUEVA FUNCIÓN PARA OPTIMIZAR RUTAS ---
+export const optimizeRepartos = async (req, res) => {
+    const { repartos } = req.body;
+
+    if (!repartos || !Array.isArray(repartos) || repartos.length === 0) {
+        return res.status(400).json({ error: 'Se requiere una lista de repartos.' });
+    }
+
+    try {
+        // --- Paso 1: Geocodificación ---
+        const geocodePromises = repartos.map(reparto => {
+            const query = encodeURIComponent(`${reparto.direccion}, Argentina`);
+            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${query}`;
+            return axios.get(url, {
+                headers: { 'User-Agent': 'RepartosApp/1.0' } // Nominatim requiere un User-Agent
+            });
+        });
+
+        const responses = await Promise.all(geocodePromises);
+
+        const waypoints = responses.map((response, index) => {
+            if (response.data && response.data.length > 0) {
+                const { lat, lon } = response.data[0];
+                return {
+                    ...repartos[index],
+                    coordinates: [parseFloat(lat), parseFloat(lon)]
+                };
+            }
+            return {
+                ...repartos[index],
+                coordinates: null // Marcar si no se pudo geocodificar
+            };
+        }).filter(reparto => reparto.coordinates); // Filtrar los que no se encontraron
+
+        if (waypoints.length < 2) {
+             return res.status(400).json({ error: 'Se necesitan al menos dos direcciones válidas para optimizar la ruta.' });
+        }
+
+        // --- Por ahora, solo devolvemos los waypoints con coordenadas ---
+        // En la siguiente fase, aquí llamaremos a OSRM para obtener la ruta
+        
+        // Simulación de la respuesta que dará OSRM en el futuro
+        const mockResponse = {
+            repartosOrdenados: waypoints, // Por ahora, sin ordenar
+            ruta: waypoints.map(wp => wp.coordinates) // Una línea recta simple por ahora
+        };
+
+        res.status(200).json(mockResponse);
+
+    } catch (error) {
+        console.error('Error en la optimización de ruta:', error.message);
+        res.status(500).json({ error: 'Error al procesar la ruta.', details: error.message });
     }
 };

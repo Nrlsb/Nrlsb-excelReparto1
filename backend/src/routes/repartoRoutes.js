@@ -6,7 +6,8 @@ import {
   updateReparto, 
   deleteReparto, 
   exportRepartos,
-  clearAllRepartos
+  clearAllRepartos,
+  optimizeRepartos // Importamos la nueva función
 } from '../controllers/repartoController.js';
 import authMiddleware from '../middleware/authMiddleware.js';
 
@@ -17,9 +18,10 @@ router.get('/', authMiddleware, getRepartos);
 router.post('/', authMiddleware, createReparto);
 router.get('/export', authMiddleware, exportRepartos);
 
-// --- CORRECCIÓN DE ORDEN ---
+// --- NUEVA RUTA PARA OPTIMIZACIÓN ---
+router.post('/optimize', authMiddleware, optimizeRepartos);
+
 // La ruta específica '/all' debe declararse ANTES de la ruta genérica con parámetros como '/:id'
-// para asegurar que sea detectada correctamente por Express.
 router.delete('/all', authMiddleware, clearAllRepartos);
 
 // Rutas específicas por ID
