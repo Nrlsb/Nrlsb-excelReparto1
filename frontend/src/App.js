@@ -17,10 +17,13 @@ function App() {
   const [session, setSession] = useState(null);
   const [repartos, setRepartos] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [optimizing, setOptimizing] = useState(false); // Nuevo estado para la optimización
+  const [optimizing, setOptimizing] = useState(false);
   const [userRole, setUserRole] = useState('user');
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [rutaOptimizada, setRutaOptimizada] = useState(null);
+  
+  // --- Nuevo estado para controlar la vista activa ---
+  const [activeView, setActiveView] = useState('lista'); // 'lista' o 'mapa'
 
   const [confirmState, setConfirmState] = useState({
     isOpen: false,
@@ -107,7 +110,6 @@ function App() {
     }
   };
   
-  // --- NUEVA FUNCIÓN PARA MANEJAR LA OPTIMIZACIÓN ---
   const handleOptimizeRepartos = async () => {
     if (repartos.length < 2) {
       toast.info('Necesitas al menos 2 repartos para optimizar la ruta.');
@@ -209,6 +211,11 @@ function App() {
     setConfirmState({ isOpen: false, title: '', message: '', onConfirm: () => {} });
   };
 
+  // Clases de estilo para las pestañas
+  const tabBaseClass = "px-4 py-3 font-semibold text-sm rounded-t-lg focus:outline-none transition-colors duration-200";
+  const activeTabClass = "bg-white text-purple-600 border-b-2 border-purple-600";
+  const inactiveTabClass = "text-gray-500 hover:text-purple-600 bg-gray-50";
+
   return (
     <>
       <div className="container mx-auto p-4 sm:p-6 lg:p-8">
@@ -218,26 +225,58 @@ function App() {
           <div>
             <Header session={session} onOpenAccountModal={() => setShowAccountModal(true)} />
             <main>
-              <RepartoForm onAddReparto={handleAddReparto} session={session} />
-              
-              <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 mt-8">
-                <div className="lg:col-span-3">
-                  <RepartosTable
-                    repartos={repartos}
-                    loading={loading}
-                    optimizing={optimizing} // Pasamos el estado de optimización
-                    onUpdateReparto={handleUpdateReparto}
-                    onDeleteReparto={handleDeleteReparto}
-                    onClearRepartos={handleClearRepartos}
-                    onOptimizeRepartos={handleOptimizeRepartos} // Pasamos la nueva función
-                    isAdmin={hasElevatedPermissions}
-                    session={session}
-                  />
-                </div>
-                <div className="lg:col-span-2">
-                  <RepartoMap repartos={repartos} rutaOptimizada={rutaOptimizada} />
-                </div>
+              {/* --- NAVEGACIÓN POR PESTAÑAS --- */}
+              <div className="mb-6 border-b border-gray-200">
+                <nav className="-mb-px flex space-x-2" aria-label="Tabs">
+                  <button
+                    onClick={() => setActiveView('lista')}
+                    className={`${tabBaseClass} ${activeView === 'lista' ? activeTabClass : inactiveTabClass}`}
+                  >
+                    📝 Lista de Repartos
+                  </button>
+                  <button
+                    onClick={() => setActiveView('mapa')}
+                    className={`${tabBaseClass} ${activeView === 'mapa' ? activeTabClass : inactiveTabClass}`}
+                  >
+                    🗺️ Mapa y Ruta
+                  </button>
+                </nav>
               </div>
+
+              {/* --- RENDERIZADO CONDICIONAL DEL CONTENIDO --- */}
+              {activeView === 'lista' && (
+                <div>
+                  <RepartoForm onAddReparto={handleAddReparto} session={session} />
+                  <div className="mt-8">
+                    <RepartosTable
+                      repartos={repartos}
+                      loading={loading}
+                      onUpdateReparto={handleUpdateReparto}
+                      onDeleteReparto={handleDeleteReparto}
+                      onClearRepartos={handleClearRepartos}
+                      isAdmin={hasElevatedPermissions}
+                      session={session}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {activeView === 'mapa' && (
+                <div>
+                  <div className="flex flex-wrap gap-4 mb-5">
+                    <button 
+                      className="px-5 py-2 border-none rounded-lg text-sm font-semibold cursor-pointer transition-transform duration-200 uppercase tracking-wider text-white bg-gradient-to-r from-cyan-500 to-blue-500 hover:scale-105 disabled:opacity-60"
+                      onClick={handleOptimizeRepartos}
+                      disabled={optimizing || repartos.length < 2}
+                    >
+                      {optimizing ? 'Optimizando...' : '🗺️ Optimizar Ruta'}
+                    </button>
+                  </div>
+                  <div className="h-[75vh] w-full">
+                    <RepartoMap repartos={repartos} rutaOptimizada={rutaOptimizada} />
+                  </div>
+                </div>
+              )}
             </main>
           </div>
         )}
