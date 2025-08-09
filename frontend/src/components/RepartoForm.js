@@ -67,7 +67,6 @@ function RepartoForm({ onAddReparto, session }) {
   const [userCoords, setUserCoords] = useState(null);
   const debouncedDireccion = useDebounce(direccion, 500);
   
-  // --- Nuevo estado para la posición del marcador ---
   const [markerPosition, setMarkerPosition] = useState(null);
 
   useEffect(() => {
@@ -90,7 +89,8 @@ function RepartoForm({ onAddReparto, session }) {
           const { lon, lat } = userCoords;
           url += `&viewbox=${lon-0.5},${lat+0.5},${lon+0.5},${lat-0.5}&bounded=1`;
         }
-        const response = await axios.get(url, { headers: { 'User-Agent': 'RepartosApp/1.0' } });
+        // CORRECCIÓN: Se elimina la cabecera 'User-Agent'
+        const response = await axios.get(url);
         setSugerencias(response.data);
       } catch (error) {
         toast.warn('No se pudieron obtener sugerencias.');
@@ -118,7 +118,6 @@ function RepartoForm({ onAddReparto, session }) {
         bultos: parseInt(bultos),
         agregado_por: agregadoPor,
       };
-      // Si se ajustó el marcador, añadimos las coordenadas
       if (markerPosition) {
         newReparto.lat = markerPosition.lat;
         newReparto.lon = markerPosition.lng;
@@ -131,7 +130,7 @@ function RepartoForm({ onAddReparto, session }) {
       setHorarios('');
       setBultos('');
       setSugerencias([]);
-      setMarkerPosition(null); // Limpiar el mapa
+      setMarkerPosition(null);
     } finally {
       setIsSubmitting(false);
     }
@@ -147,7 +146,6 @@ function RepartoForm({ onAddReparto, session }) {
     <div className="bg-gray-50 p-6 rounded-xl mb-8 shadow-sm border border-gray-200">
       <form onSubmit={handleSubmit}>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* Columna de campos de texto */}
           <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
             <input type="text" value={destino} onChange={(e) => setDestino(e.target.value)} placeholder="Destino" required className="w-full p-3 border-2 border-gray-300 rounded-lg"/>
             <div className="relative">
@@ -166,7 +164,6 @@ function RepartoForm({ onAddReparto, session }) {
             <input type="text" value={horarios} onChange={(e) => setHorarios(e.target.value)} placeholder="Horarios (Ej: 9-18hs)" className="w-full p-3 border-2 border-gray-300 rounded-lg"/>
             <input type="number" value={bultos} onChange={(e) => setBultos(e.target.value)} placeholder="Bultos" required min="1" className="w-full p-3 border-2 border-gray-300 rounded-lg"/>
           </div>
-          {/* Columna del mapa */}
           <div className="h-64 lg:h-auto rounded-lg overflow-hidden z-0">
             {markerPosition ? (
               <MapContainer center={markerPosition} zoom={16} style={{ height: '100%', width: '100%' }}>
