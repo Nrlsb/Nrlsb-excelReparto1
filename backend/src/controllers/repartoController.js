@@ -227,6 +227,10 @@ export const optimizeRepartos = async (req, res) => {
 
     try {
         const geocodePromises = repartos.map(reparto => {
+            // --- MEJORA: Si el reparto ya tiene coordenadas, las usamos. Si no, geocodificamos. ---
+            if (reparto.lat && reparto.lon) {
+                return Promise.resolve({ data: [{ lat: reparto.lat, lon: reparto.lon }] });
+            }
             const query = encodeURIComponent(`${reparto.direccion}, Argentina`);
             const url = `https://nominatim.openstreetmap.org/search?format=json&q=${query}`;
             return axios.get(url, { headers: { 'User-Agent': 'RepartosApp/1.0' } });
@@ -242,7 +246,6 @@ export const optimizeRepartos = async (req, res) => {
             return { ...repartos[index], coordinates: null };
         }).filter(reparto => reparto.coordinates);
 
-        // Añadir punto de partida si existe
         if (startLocation && startLocation.lat && startLocation.lon) {
             waypointsConCoord.unshift({
                 id: 'start',

@@ -16,7 +16,8 @@ import RepartoMap from './components/RepartoMap';
 function App() {
   const [session, setSession] = useState(null);
   const [repartos, setRepartos] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // El estado de carga de los repartos
+  const [sessionChecked, setSessionChecked] = useState(false); // Nuevo estado para controlar la verificación inicial de la sesión
   const [optimizing, setOptimizing] = useState(false);
   const [userRole, setUserRole] = useState('user');
   const [showAccountModal, setShowAccountModal] = useState(false);
@@ -31,57 +32,40 @@ function App() {
     onConfirm: () => {},
   });
 
-  const fetchRepartos = async () => {
-    setLoading(true);
-    try {
-      const { data } = await api.get('/repartos');
-      setRepartos(data);
-      setRutaOptimizada(null);
-    } catch (error) {
-      toast.error("Error al cargar los repartos.");
-      console.error("Error fetching repartos:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  const fetchUserProfile = async (user) => {
-    try {
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single();
-
-      if (error && error.code !== 'PGRST116') throw error;
-      if (profile) setUserRole(profile.role);
-    } catch (e) {
-      console.error("Error al obtener el perfil del usuario:", e);
-      setUserRole('user');
-    }
-  };
-
+  // --- EFECTO REFACTORIZADO PARA MANEJAR LA SESIÓN ---
   useEffect(() => {
-    const handleAuthChange = async (session) => {
+    // 1. Comprueba la sesión una vez al cargar la página
+    supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
+      setSessionChecked(true); // Marca que la comprobación inicial ha terminado
+    });
+
+    // 2. Escucha los cambios en el estado de autenticación (login/logout)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []); // Se ejecuta solo una vez
+
+  // --- EFECTO REFACTORIZADO PARA CARGAR DATOS BASADO EN LA SESIÓN ---
+  useEffect(() => {
+    // Solo se ejecuta si la comprobación de sesión ha terminado
+    if (sessionChecked) {
       if (session) {
+        // Si hay sesión, cargamos los datos del usuario y los repartos
         api.defaults.headers.common['Authorization'] = `Bearer ${session.access_token}`;
-        await fetchUserProfile(session.user);
-        await fetchRepartos();
+        fetchUserProfile(session.user);
+        fetchRepartos();
       } else {
+        // Si no hay sesión, limpiamos todo y dejamos de cargar
         delete api.defaults.headers.common['Authorization'];
         setRepartos([]);
         setUserRole('user');
-        setRutaOptimizada(null);
-        setUserLocation(null);
         setLoading(false);
       }
-    };
-
-    supabase.auth.getSession().then(({ data: { session } }) => handleAuthChange(session));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => handleAuthChange(session));
-    return () => subscription.unsubscribe();
-  }, []);
+    }
+  }, [session, sessionChecked]); // Se ejecuta cuando la sesión o el estado de comprobación cambian
 
   useEffect(() => {
     if (!session) return;
@@ -92,19 +76,41 @@ function App() {
     return () => supabase.removeChannel(channel);
   }, [session]);
 
+  const fetchUserProfile = async (user) => {
+    try {
+      const { data: profile, error } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+      if (error && error.code !== 'PGRST116') throw error;
+      if (profile) setUserRole(profile.role);
+    } catch (e) {
+      console.error("Error al obtener el perfil del usuario:", e);
+      setUserRole('user');
+    }
+  };
+
+  const fetchRepartos = async () => {
+    setLoading(true);
+    try {
+      const { data } = await api.get('/repartos');
+      setRepartos(data);
+      setRutaOptimizada(null);
+    } catch (error) {
+      toast.error("Error al cargar los repartos.");
+    } finally {
+      setLoading(false);
+    }
+  };
+  
   const handleOptimizeRepartos = () => {
     if (repartos.length < 1) {
       toast.info('Necesitas al menos 1 reparto para optimizar la ruta.');
       return;
     }
     setOptimizing(true);
-
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords;
         const startLocation = { lat: latitude, lon: longitude };
         setUserLocation(startLocation);
-
         try {
           const { data } = await api.post('/repartos/optimize', { repartos, startLocation });
           setRepartos(data.repartosOrdenados);
@@ -119,7 +125,7 @@ function App() {
       },
       (error) => {
         console.error("Error obteniendo la geolocalización:", error);
-        toast.error('No se pudo obtener tu ubicación. Por favor, activa los permisos de localización en tu navegador.');
+        toast.error('No se pudo obtener tu ubicación.');
         setOptimizing(false);
       }
     );
@@ -127,7 +133,6 @@ function App() {
 
   const handleAddReparto = async (newReparto) => {
     try {
-      // La dirección ahora puede incluir lat y lon si se ajustó manualmente
       await api.post('/repartos', { ...newReparto, user_id: session.user.id });
       toast.success('Reparto agregado con éxito.');
     } catch (error) {
@@ -164,10 +169,7 @@ function App() {
   const hasElevatedPermissions = userRole === 'admin' || userRole === 'especial';
 
   const handleClearRepartos = () => {
-    const message = hasElevatedPermissions
-      ? '¿Estás seguro de que quieres eliminar TODOS los repartos? Esta acción es irreversible.'
-      : '¿Estás seguro de que quieres eliminar TODOS TUS repartos?';
-
+    const message = hasElevatedPermissions ? '¿Estás seguro de que quieres eliminar TODOS los repartos?' : '¿Estás seguro de que quieres eliminar TODOS TUS repartos?';
     setConfirmState({
       isOpen: true,
       title: 'Confirmar Vaciado',
@@ -200,6 +202,16 @@ function App() {
   const tabBaseClass = "px-4 py-3 font-semibold text-sm rounded-t-lg focus:outline-none transition-colors duration-200";
   const activeTabClass = "bg-white text-purple-600 border-b-2 border-purple-600";
   const inactiveTabClass = "text-gray-500 hover:text-purple-600 bg-gray-50";
+
+  // --- Lógica de renderizado principal ---
+  // Muestra "Cargando..." solo mientras se verifica la sesión inicial
+  if (!sessionChecked) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <p className="text-gray-500">Iniciando aplicación...</p>
+      </div>
+    );
+  }
 
   return (
     <>
