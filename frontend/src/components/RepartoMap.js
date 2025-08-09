@@ -1,11 +1,8 @@
 // frontend/src/components/RepartoMap.js
 import React, { useEffect, useState } from 'react';
-// CORRECCIÓN: Se importa el hook 'useMap' para acceder a la instancia del mapa.
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import axios from 'axios';
 import { toast } from 'react-toastify';
-
-// Componente para el ícono personalizado
 import { Icon } from 'leaflet';
 
 // Creación de un ícono personalizado para los marcadores
@@ -20,14 +17,28 @@ const customIcon = new Icon({
 
 // Componente interno para ajustar los límites del mapa dinámicamente
 const FitBounds = ({ bounds }) => {
-  // CORRECCIÓN: Se utiliza el hook useMap() para obtener la instancia del mapa de forma segura.
   const map = useMap(); 
   useEffect(() => {
     if (bounds && bounds.length > 0) {
-      map.fitBounds(bounds, { padding: [50, 50] });
+      // Si solo hay un marcador, centramos la vista en él con un zoom fijo.
+      if (bounds.length === 1) {
+        map.setView(bounds[0], 15); // Zoom nivel 15 para un solo punto
+      } else {
+      // Si hay múltiples marcadores, ajustamos los límites para que todos sean visibles.
+        map.fitBounds(bounds, { padding: [50, 50] });
+      }
     }
   }, [bounds, map]);
   return null;
+};
+
+// Componente Placeholder para mostrar mientras carga el mapa
+const MapPlaceholder = () => {
+  return (
+    <div className="flex items-center justify-center h-full bg-gray-100 rounded-lg">
+      <p className="text-gray-500">Cargando mapa...</p>
+    </div>
+  );
 };
 
 
@@ -36,7 +47,6 @@ function RepartoMap({ repartos, rutaOptimizada }) {
   const [loading, setLoading] = useState(false);
   const [bounds, setBounds] = useState(null);
 
-  // Efecto para geocodificar las direcciones cuando cambian los repartos
   useEffect(() => {
     const geocodeRepartos = async () => {
       if (!repartos || repartos.length === 0) {
@@ -46,7 +56,6 @@ function RepartoMap({ repartos, rutaOptimizada }) {
       }
 
       setLoading(true);
-      // Usamos Promise.allSettled para manejar errores individuales sin detener todo
       const promises = repartos.map(reparto =>
         axios.get(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(reparto.direccion + ', Argentina')}`, {
           headers: { 'User-Agent': 'RepartosApp/1.0' }
@@ -90,13 +99,19 @@ function RepartoMap({ repartos, rutaOptimizada }) {
   }, [repartos]);
 
   return (
-    <div className="bg-white rounded-xl shadow-md p-4 h-96 lg:h-full relative">
+    <div className="bg-white rounded-xl shadow-md p-4 h-full relative">
       {loading && (
         <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10 rounded-lg">
           <p className="text-gray-600 font-semibold">Buscando direcciones en el mapa...</p>
         </div>
       )}
-      <MapContainer center={[-34.6037, -58.3816]} zoom={4} style={{ height: '100%', width: '100%', borderRadius: '0.5rem' }}>
+      <MapContainer 
+        // MEJORA: Vista inicial centrada en Santa Fe con un mejor zoom.
+        center={[-31.6106, -60.6973]} 
+        zoom={10} 
+        style={{ height: '100%', width: '100%', borderRadius: '0.5rem' }}
+        placeholder={<MapPlaceholder />}
+      >
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
