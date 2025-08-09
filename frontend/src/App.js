@@ -21,9 +21,8 @@ function App() {
   const [userRole, setUserRole] = useState('user');
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [rutaOptimizada, setRutaOptimizada] = useState(null);
-  
-  // --- Nuevo estado para controlar la vista activa ---
-  const [activeView, setActiveView] = useState('lista'); // 'lista' o 'mapa'
+  const [userLocation, setUserLocation] = useState(null); // Estado para la ubicación del usuario
+  const [activeView, setActiveView] = useState('lista');
 
   const [confirmState, setConfirmState] = useState({
     isOpen: false,
@@ -45,16 +44,10 @@ function App() {
             .eq('id', session.user.id)
             .single();
           
-          if (error && error.code !== 'PGRST116') {
-            throw error;
-          }
+          if (error && error.code !== 'PGRST116') throw error;
+          if (profile) setUserRole(profile.role);
+          else setTimeout(() => setupSession(session), 1500);
 
-          if (profile) {
-            setUserRole(profile.role);
-          } else {
-            setTimeout(() => setupSession(session), 1500);
-            return;
-          }
         } catch (e) {
             console.error("Error al obtener el perfil del usuario:", e);
             setUserRole('user');
@@ -69,31 +62,18 @@ function App() {
       }
     };
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setupSession(session);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setupSession(session);
-    });
-
+    supabase.auth.getSession().then(({ data: { session } }) => setupSession(session));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setupSession(session));
     return () => subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
     if (!session) return;
-
     const channel = supabase
       .channel('repartos_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'repartos' }, (payload) => {
-        console.log('Change received!', payload);
-        fetchRepartos();
-      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'repartos' }, () => fetchRepartos())
       .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => supabase.removeChannel(channel);
   }, [session]);
 
   const fetchRepartos = async () => {
@@ -104,42 +84,50 @@ function App() {
       setRutaOptimizada(null);
     } catch (error) {
       toast.error("Error al cargar los repartos.");
-      console.error("Error fetching repartos:", error);
     } finally {
       setLoading(false);
     }
   };
   
-  const handleOptimizeRepartos = async () => {
-    if (repartos.length < 2) {
-      toast.info('Necesitas al menos 2 repartos para optimizar la ruta.');
+  const handleOptimizeRepartos = () => {
+    if (repartos.length < 1) {
+      toast.info('Necesitas al menos 1 reparto para optimizar la ruta.');
       return;
     }
     setOptimizing(true);
-    try {
-      const { data } = await api.post('/repartos/optimize', { repartos });
-      setRepartos(data.repartosOrdenados);
-      setRutaOptimizada(data.ruta);
-      toast.success('¡Ruta optimizada con éxito!');
-    } catch (error) {
-      const errorMessage = error.response?.data?.error || 'No se pudo optimizar la ruta.';
-      toast.error(errorMessage);
-      console.error("Error optimizing repartos:", error);
-    } finally {
-      setOptimizing(false);
-    }
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        const startLocation = { lat: latitude, lon: longitude };
+        setUserLocation(startLocation);
+
+        try {
+          const { data } = await api.post('/repartos/optimize', { repartos, startLocation });
+          setRepartos(data.repartosOrdenados);
+          setRutaOptimizada(data.ruta);
+          toast.success('¡Ruta optimizada desde tu ubicación!');
+        } catch (error) {
+          const errorMessage = error.response?.data?.error || 'No se pudo optimizar la ruta.';
+          toast.error(errorMessage);
+        } finally {
+          setOptimizing(false);
+        }
+      },
+      (error) => {
+        console.error("Error obteniendo la geolocalización:", error);
+        toast.error('No se pudo obtener tu ubicación. Por favor, activa los permisos de localización en tu navegador.');
+        setOptimizing(false);
+      }
+    );
   };
 
   const handleAddReparto = async (newReparto) => {
     try {
-      await api.post('/repartos', {
-        ...newReparto,
-        user_id: session.user.id,
-      });
+      await api.post('/repartos', { ...newReparto, user_id: session.user.id });
       toast.success('Reparto agregado con éxito.');
     } catch (error) {
       toast.error('No se pudo agregar el reparto.');
-      console.error('Error adding reparto:', error);
     }
   };
 
@@ -149,7 +137,6 @@ function App() {
       toast.success(`Reparto #${id} actualizado.`);
     } catch (error) {
       toast.error('No se pudo actualizar el reparto.');
-      console.error('Error updating reparto:', error);
     }
   };
 
@@ -164,7 +151,6 @@ function App() {
           toast.info(`Reparto #${id} eliminado.`);
         } catch (error) {
           toast.error('No se pudo eliminar el reparto.');
-          console.error('Error deleting reparto:', error);
         }
         closeConfirmModal();
       },
@@ -175,7 +161,7 @@ function App() {
 
   const handleClearRepartos = () => {
     const message = hasElevatedPermissions
-      ? '¿Estás seguro de que quieres eliminar TODOS los repartos de la base de datos? Esta acción es irreversible.'
+      ? '¿Estás seguro de que quieres eliminar TODOS los repartos? Esta acción es irreversible.'
       : '¿Estás seguro de que quieres eliminar TODOS TUS repartos?';
 
     setConfirmState({
@@ -188,7 +174,6 @@ function App() {
           toast.warn('Se han eliminado los repartos.');
         } catch (error) {
           toast.error('No se pudieron eliminar los repartos.');
-          console.error('Error clearing repartos:', error);
         }
         closeConfirmModal();
       },
@@ -203,15 +188,11 @@ function App() {
       setShowAccountModal(false);
     } catch (error) {
       toast.error('No se pudo actualizar el perfil.');
-      console.error('Error updating profile:', error);
     }
   };
 
-  const closeConfirmModal = () => {
-    setConfirmState({ isOpen: false, title: '', message: '', onConfirm: () => {} });
-  };
+  const closeConfirmModal = () => setConfirmState({ isOpen: false });
 
-  // Clases de estilo para las pestañas
   const tabBaseClass = "px-4 py-3 font-semibold text-sm rounded-t-lg focus:outline-none transition-colors duration-200";
   const activeTabClass = "bg-white text-purple-600 border-b-2 border-purple-600";
   const inactiveTabClass = "text-gray-500 hover:text-purple-600 bg-gray-50";
@@ -219,43 +200,29 @@ function App() {
   return (
     <>
       <div className="container mx-auto p-4 sm:p-6 lg:p-8">
-        {!session ? (
-          <Auth />
-        ) : (
+        {!session ? <Auth /> : (
           <div>
             <Header session={session} onOpenAccountModal={() => setShowAccountModal(true)} />
             <main>
-              {/* --- NAVEGACIÓN POR PESTAÑAS --- */}
               <div className="mb-6 border-b border-gray-200">
                 <nav className="-mb-px flex space-x-2" aria-label="Tabs">
-                  <button
-                    onClick={() => setActiveView('lista')}
-                    className={`${tabBaseClass} ${activeView === 'lista' ? activeTabClass : inactiveTabClass}`}
-                  >
+                  <button onClick={() => setActiveView('lista')} className={`${tabBaseClass} ${activeView === 'lista' ? activeTabClass : inactiveTabClass}`}>
                     📝 Lista de Repartos
                   </button>
-                  <button
-                    onClick={() => setActiveView('mapa')}
-                    className={`${tabBaseClass} ${activeView === 'mapa' ? activeTabClass : inactiveTabClass}`}
-                  >
+                  <button onClick={() => setActiveView('mapa')} className={`${tabBaseClass} ${activeView === 'mapa' ? activeTabClass : inactiveTabClass}`}>
                     🗺️ Mapa y Ruta
                   </button>
                 </nav>
               </div>
 
-              {/* --- RENDERIZADO CONDICIONAL DEL CONTENIDO --- */}
               {activeView === 'lista' && (
                 <div>
                   <RepartoForm onAddReparto={handleAddReparto} session={session} />
                   <div className="mt-8">
                     <RepartosTable
-                      repartos={repartos}
-                      loading={loading}
-                      onUpdateReparto={handleUpdateReparto}
-                      onDeleteReparto={handleDeleteReparto}
-                      onClearRepartos={handleClearRepartos}
-                      isAdmin={hasElevatedPermissions}
-                      session={session}
+                      repartos={repartos} loading={loading} onUpdateReparto={handleUpdateReparto}
+                      onDeleteReparto={handleDeleteReparto} onClearRepartos={handleClearRepartos}
+                      isAdmin={hasElevatedPermissions} session={session}
                     />
                   </div>
                 </div>
@@ -267,13 +234,13 @@ function App() {
                     <button 
                       className="px-5 py-2 border-none rounded-lg text-sm font-semibold cursor-pointer transition-transform duration-200 uppercase tracking-wider text-white bg-gradient-to-r from-cyan-500 to-blue-500 hover:scale-105 disabled:opacity-60"
                       onClick={handleOptimizeRepartos}
-                      disabled={optimizing || repartos.length < 2}
+                      disabled={optimizing || repartos.length < 1}
                     >
-                      {optimizing ? 'Optimizando...' : '🗺️ Optimizar Ruta'}
+                      {optimizing ? 'Optimizando...' : '🗺️ Optimizar Ruta desde mi Ubicación'}
                     </button>
                   </div>
                   <div className="h-[75vh] w-full">
-                    <RepartoMap repartos={repartos} rutaOptimizada={rutaOptimizada} />
+                    <RepartoMap repartos={repartos} rutaOptimizada={rutaOptimizada} userLocation={userLocation} />
                   </div>
                 </div>
               )}
@@ -281,19 +248,8 @@ function App() {
           </div>
         )}
       </div>
-      {showAccountModal && (
-        <Account
-          session={session}
-          onClose={() => setShowAccountModal(false)}
-          onSave={handleUpdateProfile}
-        />
-      )}
-      <ConfirmModal
-        isOpen={confirmState.isOpen}
-        onClose={closeConfirmModal}
-        onConfirm={confirmState.onConfirm}
-        title={confirmState.title}
-      >
+      {showAccountModal && <Account session={session} onClose={() => setShowAccountModal(false)} onSave={handleUpdateProfile} />}
+      <ConfirmModal isOpen={confirmState.isOpen} onClose={closeConfirmModal} onConfirm={confirmState.onConfirm} title={confirmState.title}>
         {confirmState.message}
       </ConfirmModal>
       <ToastContainer position="bottom-right" autoClose={3000} hideProgressBar={false} />
