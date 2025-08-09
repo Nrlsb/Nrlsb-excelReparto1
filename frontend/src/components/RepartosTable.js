@@ -2,9 +2,10 @@ import React, { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { toast } from 'react-toastify';
 import RepartoRow from './RepartoRow';
-import api from '../services/api'; // Importamos la instancia de api
+import api from '../services/api';
 
-function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, onDeleteReparto, isAdmin, session }) {
+// Se añade onOptimizeRepartos a las props
+function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, onDeleteReparto, onOptimizeRepartos, optimizing, isAdmin, session }) {
   const [sortKey, setSortKey] = useState('id');
   const [sortOrder, setSortOrder] = useState('asc');
 
@@ -75,7 +76,6 @@ function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, on
     XLSX.writeFile(wb, "repartos.xlsx");
   };
 
-  // --- NUEVA FUNCIÓN para exportar con la plantilla del backend ---
   const handleTemplateExport = async () => {
     if (!session) {
         toast.error("Debes iniciar sesión para exportar.");
@@ -83,7 +83,7 @@ function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, on
     }
     try {
         const response = await api.get('/repartos/export', {
-            responseType: 'blob', // Importante para manejar la respuesta como un archivo
+            responseType: 'blob',
         });
 
         const disposition = response.headers['content-disposition'];
@@ -118,12 +118,19 @@ function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, on
   return (
     <div className="overflow-x-auto">
       <div className="flex flex-wrap gap-4 mb-5">
+        {/* --- BOTÓN PARA OPTIMIZAR RUTA --- */}
+        <button 
+          className="px-5 py-2 border-none rounded-lg text-sm font-semibold cursor-pointer transition-transform duration-200 uppercase tracking-wider text-white bg-gradient-to-r from-cyan-500 to-blue-500 hover:scale-105 disabled:opacity-60"
+          onClick={onOptimizeRepartos}
+          disabled={optimizing || repartos.length < 2}
+        >
+          {optimizing ? 'Optimizando...' : '🗺️ Optimizar Ruta'}
+        </button>
         <button 
           className="px-5 py-2 border-none rounded-lg text-sm font-semibold cursor-pointer transition-transform duration-200 uppercase tracking-wider text-white bg-gradient-to-r from-green-500 to-teal-500 hover:scale-105" 
           onClick={handleSimpleExportExcel}>
             📊 Exportar a Excel
         </button>
-        {/* --- BOTÓN RESTAURADO --- */}
         <button 
           className="px-5 py-2 border-none rounded-lg text-sm font-semibold cursor-pointer transition-transform duration-200 uppercase tracking-wider text-white bg-gradient-to-r from-blue-500 to-sky-500 hover:scale-105" 
           onClick={handleTemplateExport}>

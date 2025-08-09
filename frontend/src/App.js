@@ -11,15 +11,16 @@ import Account from './components/Account';
 import RepartoForm from './components/RepartoForm';
 import RepartosTable from './components/RepartosTable';
 import ConfirmModal from './components/ConfirmModal';
-import RepartoMap from './components/RepartoMap'; // Importamos el nuevo componente de mapa
+import RepartoMap from './components/RepartoMap';
 
 function App() {
   const [session, setSession] = useState(null);
   const [repartos, setRepartos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [optimizing, setOptimizing] = useState(false); // Nuevo estado para la optimización
   const [userRole, setUserRole] = useState('user');
   const [showAccountModal, setShowAccountModal] = useState(false);
-  const [rutaOptimizada, setRutaOptimizada] = useState(null); // Nuevo estado para la ruta
+  const [rutaOptimizada, setRutaOptimizada] = useState(null);
 
   const [confirmState, setConfirmState] = useState({
     isOpen: false,
@@ -97,12 +98,33 @@ function App() {
     try {
       const { data } = await api.get('/repartos');
       setRepartos(data);
-      setRutaOptimizada(null); // Limpiamos la ruta al recargar los datos
+      setRutaOptimizada(null);
     } catch (error) {
       toast.error("Error al cargar los repartos.");
       console.error("Error fetching repartos:", error);
     } finally {
       setLoading(false);
+    }
+  };
+  
+  // --- NUEVA FUNCIÓN PARA MANEJAR LA OPTIMIZACIÓN ---
+  const handleOptimizeRepartos = async () => {
+    if (repartos.length < 2) {
+      toast.info('Necesitas al menos 2 repartos para optimizar la ruta.');
+      return;
+    }
+    setOptimizing(true);
+    try {
+      const { data } = await api.post('/repartos/optimize', { repartos });
+      setRepartos(data.repartosOrdenados);
+      setRutaOptimizada(data.ruta);
+      toast.success('¡Ruta optimizada con éxito!');
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || 'No se pudo optimizar la ruta.';
+      toast.error(errorMessage);
+      console.error("Error optimizing repartos:", error);
+    } finally {
+      setOptimizing(false);
     }
   };
 
@@ -198,15 +220,16 @@ function App() {
             <main>
               <RepartoForm onAddReparto={handleAddReparto} session={session} />
               
-              {/* Nuevo diseño de dos columnas para tabla y mapa */}
               <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 mt-8">
                 <div className="lg:col-span-3">
                   <RepartosTable
                     repartos={repartos}
                     loading={loading}
+                    optimizing={optimizing} // Pasamos el estado de optimización
                     onUpdateReparto={handleUpdateReparto}
                     onDeleteReparto={handleDeleteReparto}
                     onClearRepartos={handleClearRepartos}
+                    onOptimizeRepartos={handleOptimizeRepartos} // Pasamos la nueva función
                     isAdmin={hasElevatedPermissions}
                     session={session}
                   />
