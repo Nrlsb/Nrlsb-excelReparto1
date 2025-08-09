@@ -21,7 +21,7 @@ function App() {
   const [userRole, setUserRole] = useState('user');
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [rutaOptimizada, setRutaOptimizada] = useState(null);
-  const [userLocation, setUserLocation] = useState(null); // Estado para la ubicación del usuario
+  const [userLocation, setUserLocation] = useState(null);
   const [activeView, setActiveView] = useState('lista');
 
   const [confirmState, setConfirmState] = useState({
@@ -31,64 +31,90 @@ function App() {
     onConfirm: () => {},
   });
 
-  useEffect(() => {
-    const setupSession = async (session) => {
-      setSession(session);
-      if (session) {
-        api.defaults.headers.common['Authorization'] = `Bearer ${session.access_token}`;
-        
-        try {
-          const { data: profile, error } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', session.user.id)
-            .single();
-          
-          if (error && error.code !== 'PGRST116') throw error;
-          if (profile) setUserRole(profile.role);
-          else setTimeout(() => setupSession(session), 1500);
-
-        } catch (e) {
-            console.error("Error al obtener el perfil del usuario:", e);
-            setUserRole('user');
-        }
-        
-        fetchRepartos();
-      } else {
-        delete api.defaults.headers.common['Authorization'];
-        setRepartos([]);
-        setUserRole('user');
-        setLoading(false);
-      }
-    };
-
-    supabase.auth.getSession().then(({ data: { session } }) => setupSession(session));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setupSession(session));
-    return () => subscription.unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (!session) return;
-    const channel = supabase
-      .channel('repartos_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'repartos' }, () => fetchRepartos())
-      .subscribe();
-    return () => supabase.removeChannel(channel);
-  }, [session]);
-
   const fetchRepartos = async () => {
     setLoading(true);
     try {
       const { data } = await api.get('/repartos');
       setRepartos(data);
-      setRutaOptimizada(null);
+      setRutaOptimizada(null); // Limpiamos la ruta al recargar los datos
     } catch (error) {
       toast.error("Error al cargar los repartos.");
+      console.error("Error fetching repartos:", error);
     } finally {
       setLoading(false);
     }
   };
   
+  // Función separada para obtener el perfil del usuario
+  const fetchUserProfile = async (user) => {
+    try {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+        throw error;
+      }
+      if (profile) {
+        setUserRole(profile.role);
+      }
+    } catch (e) {
+      console.error("Error al obtener el perfil del usuario:", e);
+      setUserRole('user'); // Fallback a rol básico por seguridad
+    }
+  };
+
+  // --- EFECTO DE SESIÓN REFACTORIZADO ---
+  useEffect(() => {
+    const handleAuthChange = async (session) => {
+      setSession(session);
+      if (session) {
+        api.defaults.headers.common['Authorization'] = `Bearer ${session.access_token}`;
+        // Obtenemos el perfil y los repartos en secuencia
+        await fetchUserProfile(session.user);
+        await fetchRepartos();
+      } else {
+        // Limpiar todo al cerrar sesión
+        delete api.defaults.headers.common['Authorization'];
+        setRepartos([]);
+        setUserRole('user');
+        setRutaOptimizada(null);
+        setUserLocation(null);
+        setLoading(false); // Aseguramos que no se quede cargando
+      }
+    };
+
+    // Verificación inicial de la sesión
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      handleAuthChange(session);
+    });
+
+    // Escuchar cambios de autenticación
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      handleAuthChange(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []); // Este efecto se ejecuta solo una vez al montar el componente
+
+  useEffect(() => {
+    if (!session) return;
+
+    const channel = supabase
+      .channel('repartos_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'repartos' }, (payload) => {
+        console.log('Change received!', payload);
+        fetchRepartos();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session]);
+
   const handleOptimizeRepartos = () => {
     if (repartos.length < 1) {
       toast.info('Necesitas al menos 1 reparto para optimizar la ruta.');
