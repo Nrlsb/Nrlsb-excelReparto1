@@ -11,13 +11,15 @@ import Account from './components/Account';
 import RepartoForm from './components/RepartoForm';
 import RepartosTable from './components/RepartosTable';
 import ConfirmModal from './components/ConfirmModal';
+import RepartoMap from './components/RepartoMap'; // Importamos el nuevo componente de mapa
 
 function App() {
   const [session, setSession] = useState(null);
   const [repartos, setRepartos] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [userRole, setUserRole] = useState('user'); // Estado para el rol del usuario
+  const [userRole, setUserRole] = useState('user');
   const [showAccountModal, setShowAccountModal] = useState(false);
+  const [rutaOptimizada, setRutaOptimizada] = useState(null); // Nuevo estado para la ruta
 
   const [confirmState, setConfirmState] = useState({
     isOpen: false,
@@ -26,15 +28,12 @@ function App() {
     onConfirm: () => {},
   });
 
-  // --- Efecto para manejar la sesión y obtener el rol ---
   useEffect(() => {
-    // Función para configurar la sesión y obtener datos del usuario
     const setupSession = async (session) => {
       setSession(session);
       if (session) {
         api.defaults.headers.common['Authorization'] = `Bearer ${session.access_token}`;
         
-        // Obtenemos el perfil para saber el rol del usuario
         try {
           const { data: profile, error } = await supabase
             .from('profiles')
@@ -42,25 +41,23 @@ function App() {
             .eq('id', session.user.id)
             .single();
           
-          if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+          if (error && error.code !== 'PGRST116') {
             throw error;
           }
 
           if (profile) {
             setUserRole(profile.role);
           } else {
-            // Si el perfil no existe aún (latencia del trigger), reintentamos
             setTimeout(() => setupSession(session), 1500);
             return;
           }
         } catch (e) {
             console.error("Error al obtener el perfil del usuario:", e);
-            setUserRole('user'); // Fallback a rol básico por seguridad
+            setUserRole('user');
         }
         
         fetchRepartos();
       } else {
-        // Limpiar estado al cerrar sesión
         delete api.defaults.headers.common['Authorization'];
         setRepartos([]);
         setUserRole('user');
@@ -68,12 +65,10 @@ function App() {
       }
     };
 
-    // Obtener sesión al cargar la app
     supabase.auth.getSession().then(({ data: { session } }) => {
       setupSession(session);
     });
 
-    // Escuchar cambios en la autenticación
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setupSession(session);
     });
@@ -81,7 +76,6 @@ function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // --- Efecto para la sincronización en tiempo real ---
   useEffect(() => {
     if (!session) return;
 
@@ -89,7 +83,6 @@ function App() {
       .channel('repartos_realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'repartos' }, (payload) => {
         console.log('Change received!', payload);
-        // Volvemos a cargar los repartos para reflejar el cambio
         fetchRepartos();
       })
       .subscribe();
@@ -104,6 +97,7 @@ function App() {
     try {
       const { data } = await api.get('/repartos');
       setRepartos(data);
+      setRutaOptimizada(null); // Limpiamos la ruta al recargar los datos
     } catch (error) {
       toast.error("Error al cargar los repartos.");
       console.error("Error fetching repartos:", error);
@@ -153,7 +147,6 @@ function App() {
     });
   };
   
-  // Variable para saber si el usuario tiene permisos elevados
   const hasElevatedPermissions = userRole === 'admin' || userRole === 'especial';
 
   const handleClearRepartos = () => {
@@ -181,7 +174,6 @@ function App() {
   const handleUpdateProfile = async (username) => {
     try {
       await api.put('/profile', { username });
-      // Forzamos la actualización de la sesión para obtener los nuevos metadatos
       await supabase.auth.refreshSession();
       toast.success('Perfil actualizado.');
       setShowAccountModal(false);
@@ -205,15 +197,24 @@ function App() {
             <Header session={session} onOpenAccountModal={() => setShowAccountModal(true)} />
             <main>
               <RepartoForm onAddReparto={handleAddReparto} session={session} />
-              <RepartosTable
-                repartos={repartos}
-                loading={loading}
-                onUpdateReparto={handleUpdateReparto}
-                onDeleteReparto={handleDeleteReparto}
-                onClearRepartos={handleClearRepartos}
-                isAdmin={hasElevatedPermissions} // Pasamos la nueva variable de permisos
-                session={session}
-              />
+              
+              {/* Nuevo diseño de dos columnas para tabla y mapa */}
+              <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 mt-8">
+                <div className="lg:col-span-3">
+                  <RepartosTable
+                    repartos={repartos}
+                    loading={loading}
+                    onUpdateReparto={handleUpdateReparto}
+                    onDeleteReparto={handleDeleteReparto}
+                    onClearRepartos={handleClearRepartos}
+                    isAdmin={hasElevatedPermissions}
+                    session={session}
+                  />
+                </div>
+                <div className="lg:col-span-2">
+                  <RepartoMap repartos={repartos} rutaOptimizada={rutaOptimizada} />
+                </div>
+              </div>
             </main>
           </div>
         )}
