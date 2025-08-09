@@ -9,6 +9,47 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 /**
+ * Decodifica una polilínea codificada (formato de Google/OSRM).
+ * @param {string} encoded - La cadena de la polilínea codificada.
+ * @returns {Array<[number, number]>} Un array de coordenadas [latitud, longitud].
+ */
+function decodePolyline(encoded) {
+    let lat = 0, lng = 0;
+    const coordinates = [];
+    let index = 0;
+    let shift = 0;
+    let result = 0;
+    let byte, lat_change, lng_change;
+
+    while (index < encoded.length) {
+        byte = null;
+        shift = 0;
+        result = 0;
+        do {
+            byte = encoded.charCodeAt(index++) - 63;
+            result |= (byte & 0x1f) << shift;
+            shift += 5;
+        } while (byte >= 0x20);
+        lat_change = ((result & 1) ? ~(result >> 1) : (result >> 1));
+        lat += lat_change;
+
+        shift = 0;
+        result = 0;
+        do {
+            byte = encoded.charCodeAt(index++) - 63;
+            result |= (byte & 0x1f) << shift;
+            shift += 5;
+        } while (byte >= 0x20);
+        lng_change = ((result & 1) ? ~(result >> 1) : (result >> 1));
+        lng += lng_change;
+
+        coordinates.push([lat / 1e5, lng / 1e5]);
+    }
+    return coordinates;
+}
+
+
+/**
  * Obtiene el rol de un usuario desde la tabla de perfiles.
  * @param {string} userId - El UUID del usuario.
  * @returns {Promise<string>} El rol del usuario (ej. 'admin', 'especial', 'user').
@@ -26,8 +67,6 @@ async function getUserRole(userId) {
     }
     return data.role;
 }
-
-// ... (las funciones getRepartos, createReparto, etc. permanecen iguales) ...
 
 export const getRepartos = async (req, res) => {
     try {
@@ -190,7 +229,7 @@ export const exportRepartos = async (req, res) => {
     }
 };
 
-// --- NUEVA FUNCIÓN PARA OPTIMIZAR RUTAS ---
+// --- FUNCIÓN ACTUALIZADA PARA OPTIMIZAR RUTAS ---
 export const optimizeRepartos = async (req, res) => {
     const { repartos } = req.body;
 
@@ -204,40 +243,56 @@ export const optimizeRepartos = async (req, res) => {
             const query = encodeURIComponent(`${reparto.direccion}, Argentina`);
             const url = `https://nominatim.openstreetmap.org/search?format=json&q=${query}`;
             return axios.get(url, {
-                headers: { 'User-Agent': 'RepartosApp/1.0' } // Nominatim requiere un User-Agent
+                headers: { 'User-Agent': 'RepartosApp/1.0' }
             });
         });
 
-        const responses = await Promise.all(geocodePromises);
+        const geocodeResponses = await Promise.all(geocodePromises);
 
-        const waypoints = responses.map((response, index) => {
+        const waypointsConCoord = geocodeResponses.map((response, index) => {
             if (response.data && response.data.length > 0) {
                 const { lat, lon } = response.data[0];
                 return {
                     ...repartos[index],
-                    coordinates: [parseFloat(lat), parseFloat(lon)]
+                    coordinates: [parseFloat(lon), parseFloat(lat)] // OSRM usa [lon, lat]
                 };
             }
-            return {
-                ...repartos[index],
-                coordinates: null // Marcar si no se pudo geocodificar
-            };
-        }).filter(reparto => reparto.coordinates); // Filtrar los que no se encontraron
+            return { ...repartos[index], coordinates: null };
+        }).filter(reparto => reparto.coordinates);
 
-        if (waypoints.length < 2) {
+        if (waypointsConCoord.length < 2) {
              return res.status(400).json({ error: 'Se necesitan al menos dos direcciones válidas para optimizar la ruta.' });
         }
 
-        // --- Por ahora, solo devolvemos los waypoints con coordenadas ---
-        // En la siguiente fase, aquí llamaremos a OSRM para obtener la ruta
-        
-        // Simulación de la respuesta que dará OSRM en el futuro
-        const mockResponse = {
-            repartosOrdenados: waypoints, // Por ahora, sin ordenar
-            ruta: waypoints.map(wp => wp.coordinates) // Una línea recta simple por ahora
-        };
+        // --- Paso 2: Calcular la ruta óptima con OSRM ---
+        const coordinatesString = waypointsConCoord.map(wp => wp.coordinates.join(',')).join(';');
+        const osrmUrl = `http://router.project-osrm.org/trip/v1/driving/${coordinatesString}?overview=full&source=first&roundtrip=false`;
 
-        res.status(200).json(mockResponse);
+        const osrmResponse = await axios.get(osrmUrl);
+
+        if (osrmResponse.data.code !== 'Ok') {
+            throw new Error(`Error de OSRM: ${osrmResponse.data.message}`);
+        }
+
+        const optimizedTrip = osrmResponse.data.trips[0];
+        const optimizedWaypoints = osrmResponse.data.waypoints;
+
+        // --- Paso 3: Reordenar la lista de repartos original ---
+        const repartosOrdenados = optimizedWaypoints.map(waypoint => {
+            // waypoint_index nos dice la posición original del punto en nuestra lista
+            const originalReparto = waypointsConCoord[waypoint.waypoint_index];
+            // Quitamos la propiedad temporal de coordenadas para no enviarla de más al frontend
+            const { coordinates, ...repartoData } = originalReparto;
+            return repartoData;
+        });
+        
+        // --- Paso 4: Decodificar la geometría de la ruta ---
+        const rutaPolyline = decodePolyline(optimizedTrip.geometry);
+
+        res.status(200).json({
+            repartosOrdenados,
+            ruta: rutaPolyline
+        });
 
     } catch (error) {
         console.error('Error en la optimización de ruta:', error.message);
