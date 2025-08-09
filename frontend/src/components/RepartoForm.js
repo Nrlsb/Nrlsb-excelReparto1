@@ -31,7 +31,23 @@ function RepartoForm({ onAddReparto, session }) {
   // --- Estados para el autocompletado ---
   const [sugerencias, setSugerencias] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
-  const debouncedDireccion = useDebounce(direccion, 500); // 500ms de retraso
+  const [userCoords, setUserCoords] = useState(null); // Estado para las coordenadas del usuario
+  const debouncedDireccion = useDebounce(direccion, 500);
+
+  // --- MEJORA: Obtener la ubicación del usuario al montar el componente ---
+  useEffect(() => {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setUserCoords({
+          lat: position.coords.latitude,
+          lon: position.coords.longitude,
+        });
+      },
+      () => {
+        console.warn('No se pudo obtener la ubicación para mejorar la búsqueda de direcciones.');
+      }
+    );
+  }, []);
 
   // Efecto para buscar sugerencias de direcciones
   useEffect(() => {
@@ -42,8 +58,15 @@ function RepartoForm({ onAddReparto, session }) {
       }
       setIsSearching(true);
       try {
-        // Limitamos la búsqueda a Argentina para mayor precisión
-        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(debouncedDireccion)}&countrycodes=ar`;
+        // --- MEJORA: Se priorizan los resultados cerca de la ubicación del usuario ---
+        let url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(debouncedDireccion)}&countrycodes=ar`;
+        if (userCoords) {
+          // El parámetro viewbox ayuda a priorizar resultados en un área geográfica
+          const { lon, lat } = userCoords;
+          const viewbox = `${lon-0.5},${lat+0.5},${lon+0.5},${lat-0.5}`;
+          url += `&viewbox=${viewbox}&bounded=1`;
+        }
+
         const response = await axios.get(url, {
           headers: { 'User-Agent': 'RepartosApp/1.0' }
         });
@@ -57,7 +80,7 @@ function RepartoForm({ onAddReparto, session }) {
     };
 
     buscarSugerencias();
-  }, [debouncedDireccion]);
+  }, [debouncedDireccion, userCoords]);
 
 
   const handleSubmit = async (e) => {
@@ -79,12 +102,11 @@ function RepartoForm({ onAddReparto, session }) {
         agregado_por: agregadoPor,
       });
       
-      // Limpiar formulario
       setDestino('');
       setDireccion('');
       setHorarios('');
       setBultos('');
-      setSugerencias([]); // Limpiar sugerencias
+      setSugerencias([]);
     } finally {
       setIsSubmitting(false);
     }
@@ -107,7 +129,6 @@ function RepartoForm({ onAddReparto, session }) {
             required 
             className="w-full p-3 border-2 border-gray-300 rounded-lg text-base transition duration-300 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
           />
-          {/* --- Campo de Dirección con Autocompletado --- */}
           <div className="relative">
             <input 
               type="text" 
@@ -118,7 +139,6 @@ function RepartoForm({ onAddReparto, session }) {
               autoComplete="off"
               className="w-full p-3 border-2 border-gray-300 rounded-lg text-base transition duration-300 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
             />
-            {/* --- Lista de Sugerencias --- */}
             {(isSearching || sugerencias.length > 0) && (
               <ul className="absolute z-10 w-full bg-white border border-gray-300 rounded-lg mt-1 max-h-60 overflow-y-auto shadow-lg">
                 {isSearching && <li className="px-4 py-2 text-gray-500">Buscando...</li>}
