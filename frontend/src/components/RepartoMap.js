@@ -5,7 +5,7 @@ import axios from 'axios';
 import { toast } from 'react-toastify';
 import { Icon } from 'leaflet';
 
-// Ícono para los puntos de reparto
+// Íconos y componentes auxiliares (sin cambios)
 const customIcon = new Icon({
   iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
   iconSize: [25, 41],
@@ -15,7 +15,6 @@ const customIcon = new Icon({
   shadowSize: [41, 41],
 });
 
-// Ícono para la ubicación del repartidor
 const userLocationIcon = new Icon({
   iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
   iconSize: [25, 41],
@@ -49,35 +48,63 @@ function RepartoMap({ repartos, rutaOptimizada, userLocation }) {
   const [markers, setMarkers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [bounds, setBounds] = useState(null);
+  const GOOGLE_API_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
 
+  // --- CAMBIO: Lógica para geocodificar direcciones con Google Geocoding API ---
   useEffect(() => {
     const geocodeRepartos = async () => {
       if (!repartos || repartos.length === 0) {
         setMarkers([]);
         return;
       }
+      if (!GOOGLE_API_KEY) {
+        console.error("La clave de API de Google Maps no está configurada en el frontend.");
+        return;
+      }
+
       setLoading(true);
-      const promises = repartos.map(reparto =>
-        // CORRECCIÓN: Se envía solo la dirección para mejorar la precisión.
-        axios.get(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(reparto.direccion)}`)
-      );
+      
+      const promises = repartos.map(reparto => {
+        // Si ya tenemos latitud y longitud, no hacemos la llamada a la API
+        if (reparto.lat && reparto.lon) {
+          return Promise.resolve({
+            position: [reparto.lat, reparto.lon],
+            popup: `<b>${reparto.destino}</b><br>${reparto.direccion}`,
+            id: reparto.id,
+          });
+        }
+        
+        // Si no, buscamos las coordenadas con Google
+        const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
+        const apiUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/geocode/json`;
+        
+        return axios.get(apiUrl, {
+          params: {
+            address: reparto.direccion,
+            key: GOOGLE_API_KEY,
+            components: 'country:AR',
+          }
+        }).then(response => {
+          if (response.data.status === 'OK' && response.data.results.length > 0) {
+            const { lat, lng } = response.data.results[0].geometry.location;
+            return {
+              position: [lat, lng],
+              popup: `<b>${reparto.destino}</b><br>${reparto.direccion}`,
+              id: reparto.id,
+            };
+          } else {
+            toast.warn(`No se pudo encontrar la dirección: "${reparto.direccion}"`);
+            return null;
+          }
+        }).catch(() => {
+          toast.warn(`Error al buscar la dirección: "${reparto.direccion}"`);
+          return null;
+        });
+      });
 
       try {
-        const results = await Promise.allSettled(promises);
-        const newMarkers = results
-          .map((result, index) => {
-            if (result.status === 'fulfilled' && result.value.data && result.value.data.length > 0) {
-              const { lat, lon } = result.value.data[0];
-              return {
-                position: [parseFloat(lat), parseFloat(lon)],
-                popup: `<b>${repartos[index].destino}</b><br>${repartos[index].direccion}`,
-                id: repartos[index].id,
-              };
-            }
-            toast.warn(`No se pudo encontrar la dirección: "${repartos[index].direccion}"`);
-            return null;
-          })
-          .filter(marker => marker !== null);
+        const results = await Promise.all(promises);
+        const newMarkers = results.filter(marker => marker !== null);
         setMarkers(newMarkers);
       } catch (error) {
         toast.error("Hubo un problema al buscar las direcciones.");
@@ -85,8 +112,9 @@ function RepartoMap({ repartos, rutaOptimizada, userLocation }) {
         setLoading(false);
       }
     };
+    
     geocodeRepartos();
-  }, [repartos]);
+  }, [repartos, GOOGLE_API_KEY]);
 
   useEffect(() => {
     const allPoints = [...markers.map(m => m.position)];

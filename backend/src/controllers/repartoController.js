@@ -7,7 +7,9 @@ import axios from 'axios';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const GOOGLE_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
 
+// Función para decodificar la polilínea de OSRM (sin cambios)
 function decodePolyline(encoded) {
     let lat = 0, lng = 0;
     const coordinates = [];
@@ -56,7 +58,7 @@ async function getUserRole(userId) {
     return data.role;
 }
 
-// ... (getRepartos, createReparto, etc. no han cambiado) ...
+// --- Las funciones getRepartos, createReparto, etc., no cambian ---
 export const getRepartos = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -218,8 +220,13 @@ export const exportRepartos = async (req, res) => {
     }
 };
 
+// --- CAMBIO: Función de optimización ahora usa Google Geocoding API ---
 export const optimizeRepartos = async (req, res) => {
     const { repartos, startLocation } = req.body;
+
+    if (!GOOGLE_API_KEY) {
+        return res.status(500).json({ error: 'La clave de API de Google Maps no está configurada en el servidor.' });
+    }
 
     if (!repartos || !Array.isArray(repartos) || repartos.length === 0) {
         return res.status(400).json({ error: 'Se requiere una lista de repartos.' });
@@ -227,21 +234,25 @@ export const optimizeRepartos = async (req, res) => {
 
     try {
         const geocodePromises = repartos.map(reparto => {
-            // --- MEJORA: Si el reparto ya tiene coordenadas, las usamos. Si no, geocodificamos. ---
             if (reparto.lat && reparto.lon) {
-                return Promise.resolve({ data: [{ lat: reparto.lat, lon: reparto.lon }] });
+                return Promise.resolve({ data: { results: [{ geometry: { location: { lat: reparto.lat, lng: reparto.lon } } }] } });
             }
-            const query = encodeURIComponent(`${reparto.direccion}, Argentina`);
-            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${query}`;
-            return axios.get(url, { headers: { 'User-Agent': 'RepartosApp/1.0' } });
+            const apiUrl = `https://maps.googleapis.com/maps/api/geocode/json`;
+            return axios.get(apiUrl, {
+                params: {
+                    address: reparto.direccion,
+                    key: GOOGLE_API_KEY,
+                    components: 'country:AR',
+                }
+            });
         });
 
         const geocodeResponses = await Promise.all(geocodePromises);
 
         let waypointsConCoord = geocodeResponses.map((response, index) => {
-            if (response.data && response.data.length > 0) {
-                const { lat, lon } = response.data[0];
-                return { ...repartos[index], coordinates: [parseFloat(lon), parseFloat(lat)] };
+            if (response.data.results && response.data.results.length > 0) {
+                const { lat, lng } = response.data.results[0].geometry.location;
+                return { ...repartos[index], coordinates: [lng, lat] }; // OSRM usa [lon, lat]
             }
             return { ...repartos[index], coordinates: null };
         }).filter(reparto => reparto.coordinates);

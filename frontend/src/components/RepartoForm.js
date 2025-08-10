@@ -5,7 +5,7 @@ import axios from 'axios';
 import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import { Icon } from 'leaflet';
 
-// Hook para debounce
+// Hook para debounce (sin cambios)
 const useDebounce = (value, delay) => {
   const [debouncedValue, setDebouncedValue] = useState(value);
   useEffect(() => {
@@ -15,14 +15,14 @@ const useDebounce = (value, delay) => {
   return debouncedValue;
 };
 
-// Ícono para el marcador del mapa
+// Ícono para el marcador del mapa (sin cambios)
 const customIcon = new Icon({
   iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
   iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', shadowSize: [41, 41],
 });
 
-// Componente para el marcador arrastrable
+// Componente para el marcador arrastrable (sin cambios)
 function DraggableMarker({ position, setPosition }) {
   const markerRef = useRef(null);
   const map = useMap();
@@ -41,7 +41,7 @@ function DraggableMarker({ position, setPosition }) {
 
   useEffect(() => {
     if (position) {
-      map.setView(position, 16); // Centra el mapa en el marcador
+      map.setView(position, 16);
     }
   }, [position, map]);
 
@@ -64,42 +64,84 @@ function RepartoForm({ onAddReparto, session }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [sugerencias, setSugerencias] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [userCoords, setUserCoords] = useState(null);
-  const debouncedDireccion = useDebounce(direccion, 500);
+  const debouncedDireccion = useDebounce(direccion, 400); // Reducimos un poco el delay
   
   const [markerPosition, setMarkerPosition] = useState(null);
+  const GOOGLE_API_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
 
-  useEffect(() => {
-    navigator.geolocation.getCurrentPosition(
-      (position) => setUserCoords({ lat: position.coords.latitude, lon: position.coords.longitude }),
-      () => console.warn('No se pudo obtener la ubicación para mejorar la búsqueda.')
-    );
-  }, []);
-
+  // --- CAMBIO: Lógica para buscar sugerencias con Google Places API ---
   useEffect(() => {
     const buscarSugerencias = async () => {
       if (debouncedDireccion.length < 3) {
         setSugerencias([]);
         return;
       }
+      if (!GOOGLE_API_KEY) {
+        // No mostramos toast para no ser molestos, pero sí un error en consola.
+        console.error("La clave de API de Google Maps no está configurada en el frontend.");
+        return;
+      }
       setIsSearching(true);
       try {
-        let url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(debouncedDireccion)}&countrycodes=ar`;
-        if (userCoords) {
-          const { lon, lat } = userCoords;
-          url += `&viewbox=${lon-0.5},${lat+0.5},${lon+0.5},${lat-0.5}&bounded=1`;
+        // Usamos un proxy de CORS para evitar problemas en desarrollo. En producción, la restricción de API Key es suficiente.
+        const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
+        const apiUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/place/autocomplete/json`;
+        
+        const response = await axios.get(apiUrl, {
+          params: {
+            input: debouncedDireccion,
+            key: GOOGLE_API_KEY,
+            components: 'country:ar', // Limitamos la búsqueda a Argentina
+            language: 'es', // Pedimos resultados en español
+          }
+        });
+
+        if (response.data.status === 'OK') {
+          setSugerencias(response.data.predictions);
+        } else {
+          setSugerencias([]);
+          if (response.data.status !== 'ZERO_RESULTS') {
+            toast.error(`Error de Google Places: ${response.data.error_message || response.data.status}`);
+          }
         }
-        // CORRECCIÓN: Se elimina la cabecera 'User-Agent'
-        const response = await axios.get(url);
-        setSugerencias(response.data);
       } catch (error) {
-        toast.warn('No se pudieron obtener sugerencias.');
+        toast.warn('No se pudieron obtener sugerencias de dirección.');
       } finally {
         setIsSearching(false);
       }
     };
     buscarSugerencias();
-  }, [debouncedDireccion, userCoords]);
+  }, [debouncedDireccion, GOOGLE_API_KEY]);
+
+  // --- CAMBIO: Lógica para obtener coordenadas al hacer clic en una sugerencia ---
+  const handleSuggestionClick = async (sugerencia) => {
+    // Usamos el texto completo de la sugerencia para el campo de dirección
+    setDireccion(sugerencia.description);
+    setSugerencias([]); // Ocultamos la lista de sugerencias
+
+    if (!GOOGLE_API_KEY) return;
+
+    try {
+      const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
+      const apiUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/geocode/json`;
+
+      const response = await axios.get(apiUrl, {
+        params: {
+          place_id: sugerencia.place_id,
+          key: GOOGLE_API_KEY,
+        }
+      });
+      
+      if (response.data.status === 'OK' && response.data.results.length > 0) {
+        const { lat, lng } = response.data.results[0].geometry.location;
+        setMarkerPosition({ lat, lng });
+      } else {
+        toast.error(`No se pudieron obtener las coordenadas: ${response.data.error_message || response.data.status}`);
+      }
+    } catch (error) {
+      toast.error('Error al buscar coordenadas de la dirección.');
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -136,12 +178,6 @@ function RepartoForm({ onAddReparto, session }) {
     }
   };
 
-  const handleSuggestionClick = (sugerencia) => {
-    setDireccion(sugerencia.display_name);
-    setSugerencias([]);
-    setMarkerPosition({ lat: parseFloat(sugerencia.lat), lng: parseFloat(sugerencia.lon) });
-  };
-
   return (
     <div className="bg-gray-50 p-6 rounded-xl mb-8 shadow-sm border border-gray-200">
       <form onSubmit={handleSubmit}>
@@ -155,7 +191,7 @@ function RepartoForm({ onAddReparto, session }) {
                   {isSearching && <li className="px-4 py-2 text-gray-500">Buscando...</li>}
                   {sugerencias.map((sug) => (
                     <li key={sug.place_id} className="px-4 py-2 cursor-pointer hover:bg-purple-100" onClick={() => handleSuggestionClick(sug)}>
-                      {sug.display_name}
+                      {sug.description}
                     </li>
                   ))}
                 </ul>
