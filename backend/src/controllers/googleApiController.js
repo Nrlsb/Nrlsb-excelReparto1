@@ -1,58 +1,75 @@
 // backend/src/controllers/googleApiController.js
-import axios from 'axios';
+const { getClient } = require('../config/googleClient');
+const axios = require('axios');
 
-const GOOGLE_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
-
-export const getPlaceAutocomplete = async (req, res) => {
-  const { input } = req.query;
-
-  if (!GOOGLE_API_KEY) {
-    return res.status(500).json({ error: 'La clave de API de Google Maps no está configurada en el servidor.' });
-  }
-  if (!input) {
-    return res.status(400).json({ error: 'El parámetro "input" es requerido.' });
-  }
-
-  const apiUrl = 'https://maps.googleapis.com/maps/api/place/autocomplete/json';
-
+const geocodeAddress = async (req, res) => {
+  const { address } = req.query;
   try {
-    const response = await axios.get(apiUrl, {
+    const client = getClient();
+    const response = await client.geocode({
       params: {
-        input,
-        key: GOOGLE_API_KEY,
-        components: 'country:ar',
-        language: 'es',
+        address: address,
+        key: process.env.GOOGLE_MAPS_API_KEY,
       },
     });
-    res.json(response.data);
-  } catch (error) {
-    console.error('Error en el proxy de Google Places:', error.message);
-    res.status(500).json({ error: 'Error al contactar la API de Google Places.' });
+    res.json(response.data.results[0].geometry.location);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 };
 
-export const getGeocodeFromPlaceId = async (req, res) => {
-    const { place_id } = req.query;
+const optimizeRoute = async (req, res) => {
+  const { waypoints } = req.body; // Recibe un array de waypoints (lat,lng)
+  try {
+    const client = getClient();
+    const response = await client.directions({
+      params: {
+        origin: waypoints[0],
+        destination: waypoints[0], // Vuelve al origen
+        waypoints: `optimize:true|${waypoints.slice(1).join('|')}`,
+        key: process.env.GOOGLE_MAPS_API_KEY,
+      },
+    });
+    res.json(response.data);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+};
 
-    if (!GOOGLE_API_KEY) {
-        return res.status(500).json({ error: 'La clave de API de Google Maps no está configurada en el servidor.' });
-    }
-    if (!place_id) {
-        return res.status(400).json({ error: 'El parámetro "place_id" es requerido.' });
-    }
+// NUEVA FUNCIÓN para el autocompletado de direcciones
+const getPlacePredictions = async (req, res) => {
+  const { input } = req.query;
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
 
-    const apiUrl = 'https://maps.googleapis.com/maps/api/geocode/json';
+  if (!input) {
+    return res.status(400).json({ error: 'Input query is required' });
+  }
 
-    try {
-        const response = await axios.get(apiUrl, {
-            params: {
-                place_id,
-                key: GOOGLE_API_KEY,
-            }
-        });
-        res.json(response.data);
-    } catch (error) {
-        console.error('Error en el proxy de Google Geocode:', error.message);
-        res.status(500).json({ error: 'Error al contactar la API de Google Geocode.' });
+  const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json`;
+
+  try {
+    const response = await axios.get(url, {
+      params: {
+        input: input,
+        key: apiKey,
+        // Puedes añadir más parámetros si lo necesitas, como components para limitar por país
+        // components: 'country:ar' 
+      },
+    });
+
+    if (response.data.status === 'OK') {
+      res.json(response.data.predictions);
+    } else {
+      res.status(500).json({ error: response.data.error_message || 'Error fetching predictions from Google Places API' });
     }
+  } catch (error) {
+    console.error('Error in getPlacePredictions:', error.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+module.exports = {
+  geocodeAddress,
+  optimizeRoute,
+  getPlacePredictions, // Se añade la nueva función
 };

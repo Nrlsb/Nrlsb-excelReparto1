@@ -1,14 +1,17 @@
 // backend/src/routes/googleApiRoutes.js
-import express from 'express';
-import { getPlaceAutocomplete, getGeocodeFromPlaceId } from '../controllers/googleApiController.js';
-import authMiddleware from '../middleware/authMiddleware.js';
-
+const express = require('express');
 const router = express.Router();
+const {
+  geocodeAddress,
+  optimizeRoute,
+  getPlacePredictions, // Se importa la nueva función
+} = require('../controllers/googleApiController');
+const authMiddleware = require('../middleware/authMiddleware');
 
-// Protegemos las rutas para que solo usuarios autenticados puedan usarlas
-router.use(authMiddleware);
+router.get('/geocode', authMiddleware, geocodeAddress);
+router.post('/optimize-route', authMiddleware, optimizeRoute);
 
-router.get('/places-autocomplete', getPlaceAutocomplete);
-router.get('/geocode', getGeocodeFromPlaceId);
+// NUEVA RUTA para obtener sugerencias de direcciones
+router.get('/places-autocomplete', authMiddleware, getPlacePredictions);
 
-export default router;
+module.exports = router;
