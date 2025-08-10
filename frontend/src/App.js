@@ -187,7 +187,14 @@ function App() {
     setIsOptimizing(true);
     try {
       toast.info('Obteniendo tu ubicación actual...');
-      const position = await new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject));
+      // Solicitamos alta precisión para la geolocalización
+      const position = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 5000,
+          maximumAge: 0
+        });
+      });
       const currentLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
       
       toast.info('Optimizando la ruta...');
