@@ -33,11 +33,13 @@ function App() {
   });
 
   const fetchRepartos = useCallback(async () => {
-    setLoading(true);
+    // No establecemos loading a true aquí para evitar parpadeos innecesarios.
+    // Se gestionará en el useEffect principal.
     try {
       const { data } = await api.get('/repartos');
-      if (Array.isArray(data)) setRepartos(data);
-      else {
+      if (Array.isArray(data)) {
+        setRepartos(data);
+      } else {
         setRepartos([]);
         console.error("La API no devolvió un array para los repartos:", data);
       }
@@ -45,58 +47,66 @@ function App() {
       toast.error("Error al cargar los repartos.");
       setRepartos([]);
     } finally {
-      setLoading(false);
+      setLoading(false); // Aseguramos que loading se ponga en false al finalizar.
     }
   }, []);
 
   useEffect(() => {
-    const setupSession = async (currentSession) => {
+    const setupSessionAndFetchData = async (currentSession) => {
       setSession(currentSession);
       if (currentSession) {
+        setLoading(true); // Ponemos loading a true al iniciar la carga de datos.
         api.defaults.headers.common['Authorization'] = `Bearer ${currentSession.access_token}`;
         
         try {
-          const { data: profile, error } = await supabase.from('profiles').select('role').eq('id', currentSession.user.id).single();
+          const { data: profile, error } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', currentSession.user.id)
+            .single();
 
-          if (error && error.code !== 'PGRST116') { // PGRST116 means no rows found
+          if (error && error.code !== 'PGRST116') {
             throw error;
           }
           
           if (profile) {
             setUserRole(profile.role);
-            fetchRepartos();
           } else {
-            // Perfil no encontrado, podría estar creándose. Reintentamos una vez.
-            setTimeout(async () => {
-              const { data: retryProfile, error: retryError } = await supabase.from('profiles').select('role').eq('id', currentSession.user.id).single();
-              if (retryProfile) {
-                setUserRole(retryProfile.role);
-              } else {
-                 console.error("No se pudo encontrar el perfil del usuario tras reintentar.");
-                 setUserRole('user'); // Asignar rol por defecto si no se encuentra
-              }
-              fetchRepartos();
-            }, 1500);
+            // Si no hay perfil, asumimos el rol por defecto.
+            // El trigger de Supabase debería crearlo.
+            setUserRole('user');
           }
+          
+          // Ahora que tenemos el rol (o el por defecto), cargamos los repartos.
+          await fetchRepartos();
+
         } catch (e) {
             console.error("Error al obtener el perfil:", e);
             setUserRole('user');
-            fetchRepartos(); // Intentamos cargar los repartos de todas formas
+            await fetchRepartos(); // Intentamos cargar repartos aunque falle el perfil.
         }
-        
       } else {
+        // Limpiamos todo si no hay sesión.
         delete api.defaults.headers.common['Authorization'];
         setRepartos([]);
         setUserRole('user');
-        setLoading(false);
         setOptimizedData(null);
         setActiveTab('carga');
+        setLoading(false); // Importante: dejar de cargar si no hay sesión.
       }
     };
 
-    supabase.auth.getSession().then(({ data: { session } }) => setupSession(session));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setupSession(session));
-    return () => subscription.unsubscribe();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setupSessionAndFetchData(session);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setupSessionAndFetchData(session);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [fetchRepartos]);
 
   useEffect(() => {
