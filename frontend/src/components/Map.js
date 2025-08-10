@@ -1,4 +1,4 @@
-// src/components/Map.js --- NUEVO ARCHIVO
+// src/components/Map.js
 import React, { useEffect, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 
@@ -47,27 +47,33 @@ function Map({ repartos, polyline }) {
     return decodePolyline(polyline);
   }, [polyline]);
 
-  const bounds = useMemo(() => {
-    if (!repartos || repartos.length === 0) return null;
-    return repartos.map(r => [r.location.lat, r.location.lng]);
-  }, [repartos]);
+  // --- CORRECCIÓN: Filtrar repartos que no tengan coordenadas ---
+  const repartosConCoordenadas = useMemo(() => 
+    (repartos || []).filter(r => r.location && typeof r.location.lat === 'number' && typeof r.location.lng === 'number'),
+    [repartos]
+  );
 
-  if (!repartos || repartos.length === 0) {
+  const bounds = useMemo(() => {
+    if (repartosConCoordenadas.length === 0) return null;
+    return repartosConCoordenadas.map(r => [r.location.lat, r.location.lng]);
+  }, [repartosConCoordenadas]);
+
+  if (repartosConCoordenadas.length === 0) {
     return (
       <div className="bg-gray-100 p-6 rounded-xl mb-8 shadow-sm border border-gray-200 text-center text-gray-500">
-        Optimiza la ruta para ver el mapa.
+        Optimiza la ruta para ver el mapa. Los repartos deben tener coordenadas válidas.
       </div>
     );
   }
 
   return (
     <div className="mb-8">
-      <MapContainer center={[repartos[0].location.lat, repartos[0].location.lng]} zoom={13} scrollWheelZoom={false}>
+      <MapContainer center={[repartosConCoordenadas[0].location.lat, repartosConCoordenadas[0].location.lng]} zoom={13} scrollWheelZoom={false}>
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        {repartos.map((reparto, index) => (
+        {repartosConCoordenadas.map((reparto, index) => (
           <Marker key={reparto.id} position={[reparto.location.lat, reparto.location.lng]}>
             <Popup>
               <b>{index + 1}. {reparto.destino}</b><br />{reparto.direccion}
