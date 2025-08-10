@@ -3,62 +3,30 @@ import supabase from '../config/supabaseClient.js';
 import ExcelJS from 'exceljs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import axios from 'axios';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const GOOGLE_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
 
-// Función para decodificar la polilínea de OSRM (sin cambios)
-function decodePolyline(encoded) {
-    let lat = 0, lng = 0;
-    const coordinates = [];
-    let index = 0;
-    let shift = 0;
-    let result = 0;
-    let byte, lat_change, lng_change;
-
-    while (index < encoded.length) {
-        byte = null;
-        shift = 0;
-        result = 0;
-        do {
-            byte = encoded.charCodeAt(index++) - 63;
-            result |= (byte & 0x1f) << shift;
-            shift += 5;
-        } while (byte >= 0x20);
-        lat_change = ((result & 1) ? ~(result >> 1) : (result >> 1));
-        lat += lat_change;
-
-        shift = 0;
-        result = 0;
-        do {
-            byte = encoded.charCodeAt(index++) - 63;
-            result |= (byte & 0x1f) << shift;
-            shift += 5;
-        } while (byte >= 0x20);
-        lng_change = ((result & 1) ? ~(result >> 1) : (result >> 1));
-        lng += lng_change;
-
-        coordinates.push([lat / 1e5, lng / 1e5]);
-    }
-    return coordinates;
-}
-
+/**
+ * Obtiene el rol de un usuario desde la tabla de perfiles.
+ * @param {string} userId - El UUID del usuario.
+ * @returns {Promise<string>} El rol del usuario (ej. 'admin', 'especial', 'user').
+ */
 async function getUserRole(userId) {
     const { data, error } = await supabase
         .from('profiles')
         .select('role')
         .eq('id', userId)
         .single();
+
     if (error || !data) {
         console.error(`No se pudo obtener el perfil para el usuario ${userId}:`, error?.message);
+        // Si no se encuentra un perfil, se asume el rol con menos privilegios.
         return 'user';
     }
     return data.role;
 }
 
-// --- Las funciones getRepartos, createReparto, etc., no cambian ---
 export const getRepartos = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -66,6 +34,7 @@ export const getRepartos = async (req, res) => {
 
         let query = supabase.from('repartos').select('*');
 
+        // Si el rol NO es admin o especial, filtramos los repartos por el ID del usuario.
         if (userRole !== 'admin' && userRole !== 'especial') {
             query = query.eq('user_id', userId);
         }
@@ -94,6 +63,7 @@ export const updateReparto = async (req, res) => {
         const { id } = req.params;
         const userRole = await getUserRole(req.user.id);
 
+        // Si no es admin o especial, verificamos que sea el dueño del reparto.
         if (userRole !== 'admin' && userRole !== 'especial') {
             const { data: existingReparto, error: fetchError } = await supabase
                 .from('repartos')
@@ -155,8 +125,10 @@ export const clearAllRepartos = async (req, res) => {
         let query = supabase.from('repartos').delete();
 
         if (userRole === 'admin' || userRole === 'especial') {
+            // Admin o especial borran todos los repartos
             query = query.neq('id', 0); 
         } else {
+            // Usuario normal borra solo los suyos
             query = query.eq('user_id', req.user.id);
         }
 
@@ -169,8 +141,10 @@ export const clearAllRepartos = async (req, res) => {
     }
 };
 
+
 export const exportRepartos = async (req, res) => {
     try {
+        // La lógica de exportación también debe respetar los roles
         const userId = req.user.id;
         const userRole = await getUserRole(userId);
 
@@ -217,85 +191,5 @@ export const exportRepartos = async (req, res) => {
     } catch (err) {
         console.error('Error al exportar:', err);
         res.status(500).json({ error: 'No se pudo generar el archivo Excel.', details: err.message });
-    }
-};
-
-// --- CAMBIO: Función de optimización ahora usa Google Geocoding API ---
-export const optimizeRepartos = async (req, res) => {
-    const { repartos, startLocation } = req.body;
-
-    if (!GOOGLE_API_KEY) {
-        return res.status(500).json({ error: 'La clave de API de Google Maps no está configurada en el servidor.' });
-    }
-
-    if (!repartos || !Array.isArray(repartos) || repartos.length === 0) {
-        return res.status(400).json({ error: 'Se requiere una lista de repartos.' });
-    }
-
-    try {
-        const geocodePromises = repartos.map(reparto => {
-            if (reparto.lat && reparto.lon) {
-                return Promise.resolve({ data: { results: [{ geometry: { location: { lat: reparto.lat, lng: reparto.lon } } }] } });
-            }
-            const apiUrl = `https://maps.googleapis.com/maps/api/geocode/json`;
-            return axios.get(apiUrl, {
-                params: {
-                    address: reparto.direccion,
-                    key: GOOGLE_API_KEY,
-                    components: 'country:AR',
-                }
-            });
-        });
-
-        const geocodeResponses = await Promise.all(geocodePromises);
-
-        let waypointsConCoord = geocodeResponses.map((response, index) => {
-            if (response.data.results && response.data.results.length > 0) {
-                const { lat, lng } = response.data.results[0].geometry.location;
-                return { ...repartos[index], coordinates: [lng, lat] }; // OSRM usa [lon, lat]
-            }
-            return { ...repartos[index], coordinates: null };
-        }).filter(reparto => reparto.coordinates);
-
-        if (startLocation && startLocation.lat && startLocation.lon) {
-            waypointsConCoord.unshift({
-                id: 'start',
-                destino: 'Punto de Partida',
-                direccion: 'Ubicación actual',
-                coordinates: [startLocation.lon, startLocation.lat]
-            });
-        }
-
-        if (waypointsConCoord.length < 2) {
-             return res.status(400).json({ error: 'Se necesitan al menos dos direcciones válidas para optimizar la ruta.' });
-        }
-
-        const coordinatesString = waypointsConCoord.map(wp => wp.coordinates.join(',')).join(';');
-        const osrmUrl = `http://router.project-osrm.org/trip/v1/driving/${coordinatesString}?overview=full&source=first&roundtrip=false`;
-
-        const osrmResponse = await axios.get(osrmUrl);
-
-        if (osrmResponse.data.code !== 'Ok') {
-            throw new Error(`Error de OSRM: ${osrmResponse.data.message}`);
-        }
-
-        const optimizedTrip = osrmResponse.data.trips[0];
-        const optimizedWaypoints = osrmResponse.data.waypoints;
-
-        const repartosOrdenados = optimizedWaypoints
-            .map(waypoint => waypointsConCoord[waypoint.waypoint_index])
-            .filter(reparto => reparto.id !== 'start')
-            .map(reparto => {
-                const { coordinates, ...repartoData } = reparto;
-                return repartoData;
-            });
-        
-        const rutaPolyline = decodePolyline(optimizedTrip.geometry);
-
-        res.status(200).json({ repartosOrdenados, ruta: rutaPolyline });
-
-    } catch (error) {
-        console.error('Error en la optimización de ruta:', error.message);
-        res.status(500).json({ error: 'Error al procesar la ruta.', details: error.message });
     }
 };
