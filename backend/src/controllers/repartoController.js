@@ -3,6 +3,7 @@ import supabase from '../config/supabaseClient.js';
 import ExcelJS from 'exceljs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import axios from 'axios'; // <-- Importamos Axios
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,6 +27,47 @@ async function getUserRole(userId) {
     }
     return data.role;
 }
+
+// --- NUEVA FUNCIÓN PARA OPTIMIZAR LA RUTA ---
+export const optimizeRoute = async (req, res) => {
+    const { repartos } = req.body;
+
+    if (!repartos || repartos.length < 2) {
+        return res.status(400).json({ error: 'Se necesitan al menos 2 repartos para optimizar la ruta.' });
+    }
+
+    // --- SIMULACIÓN DE API DE MAPAS ---
+    // En una aplicación real, aquí llamarías a un servicio como Google Maps Directions API,
+    // Mapbox Optimization API, o similar. Estos servicios requieren una clave de API.
+    // Por ejemplo, con Mapbox, el proceso sería:
+    // 1. Geocodificar cada dirección para obtener latitud y longitud.
+    // 2. Enviar todas las coordenadas al servicio de optimización.
+    // 3. El servicio devuelve los puntos (waypoints) en el orden óptimo.
+
+    try {
+        // Como no podemos usar una API real aquí, simularemos la optimización
+        // invirtiendo el orden de la lista como demostración.
+        // En un caso real, reemplazarías esta lógica con la llamada a la API.
+        
+        console.log('Simulando optimización de ruta...');
+        const waypoints = repartos.map(r => r.direccion);
+        console.log('Waypoints a optimizar:', waypoints);
+
+        // Lógica de simulación: Simplemente invertimos el array.
+        const optimizedRepartos = [...repartos].reverse();
+
+        // En un caso real, el resultado de la API te daría un nuevo orden.
+        // Tendrías que reordenar el array `repartos` original basado en la respuesta de la API.
+        // Por ejemplo: `const optimizedRepartos = apiResponse.waypoints.map(waypoint => repartos[waypoint.waypoint_index]);`
+
+        res.status(200).json(optimizedRepartos);
+
+    } catch (err) {
+        console.error('Error en la optimización de ruta (simulada):', err);
+        res.status(500).json({ error: 'No se pudo optimizar la ruta.', details: err.message });
+    }
+};
+
 
 export const getRepartos = async (req, res) => {
     try {

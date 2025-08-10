@@ -4,9 +4,10 @@ import { toast } from 'react-toastify';
 import RepartoRow from './RepartoRow';
 import api from '../services/api'; // Importamos la instancia de api
 
-function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, onDeleteReparto, isAdmin, session }) {
+function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, onDeleteReparto, isAdmin, session, onRouteOptimized }) {
   const [sortKey, setSortKey] = useState('id');
   const [sortOrder, setSortOrder] = useState('asc');
+  const [isOptimizing, setIsOptimizing] = useState(false); // Nuevo estado para la optimización
 
   const sortedRepartos = useMemo(() => {
     const sorted = [...repartos];
@@ -75,7 +76,6 @@ function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, on
     XLSX.writeFile(wb, "repartos.xlsx");
   };
 
-  // --- NUEVA FUNCIÓN para exportar con la plantilla del backend ---
   const handleTemplateExport = async () => {
     if (!session) {
         toast.error("Debes iniciar sesión para exportar.");
@@ -83,7 +83,7 @@ function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, on
     }
     try {
         const response = await api.get('/repartos/export', {
-            responseType: 'blob', // Importante para manejar la respuesta como un archivo
+            responseType: 'blob', 
         });
 
         const disposition = response.headers['content-disposition'];
@@ -113,17 +113,45 @@ function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, on
     }
   };
 
+  // --- NUEVA FUNCIÓN para optimizar la ruta ---
+  const handleOptimizeRoute = async () => {
+    if (repartos.length < 2) {
+      toast.info('Necesitas al menos 2 repartos para optimizar la ruta.');
+      return;
+    }
+    setIsOptimizing(true);
+    try {
+      const { data: optimizedData } = await api.post('/repartos/optimize', { repartos });
+      onRouteOptimized(optimizedData);
+      toast.success('Ruta optimizada con éxito.');
+      setSortKey(null); // Desactivamos el ordenamiento manual para ver el orden de la ruta
+    } catch (error) {
+      toast.error('No se pudo optimizar la ruta.');
+      console.error('Error optimizing route:', error);
+    } finally {
+      setIsOptimizing(false);
+    }
+  };
+
+
   const colSpan = isAdmin ? 7 : 6;
 
   return (
     <div className="overflow-x-auto">
       <div className="flex flex-wrap gap-4 mb-5">
+        {/* --- NUEVO BOTÓN DE OPTIMIZACIÓN --- */}
+        <button 
+          className="px-5 py-2 border-none rounded-lg text-sm font-semibold cursor-pointer transition-transform duration-200 uppercase tracking-wider text-white bg-gradient-to-r from-cyan-500 to-blue-500 hover:scale-105 disabled:opacity-60"
+          onClick={handleOptimizeRoute}
+          disabled={isOptimizing || loading}
+        >
+          {isOptimizing ? 'Optimizando...' : '🗺️ Optimizar Ruta'}
+        </button>
         <button 
           className="px-5 py-2 border-none rounded-lg text-sm font-semibold cursor-pointer transition-transform duration-200 uppercase tracking-wider text-white bg-gradient-to-r from-green-500 to-teal-500 hover:scale-105" 
           onClick={handleSimpleExportExcel}>
             📊 Exportar a Excel
         </button>
-        {/* --- BOTÓN RESTAURADO --- */}
         <button 
           className="px-5 py-2 border-none rounded-lg text-sm font-semibold cursor-pointer transition-transform duration-200 uppercase tracking-wider text-white bg-gradient-to-r from-blue-500 to-sky-500 hover:scale-105" 
           onClick={handleTemplateExport}>

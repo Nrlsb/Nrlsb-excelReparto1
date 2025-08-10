@@ -195,6 +195,11 @@ function App() {
     setConfirmState({ isOpen: false, title: '', message: '', onConfirm: () => {} });
   };
 
+  // --- NUEVA FUNCIÓN para actualizar el estado con la ruta optimizada ---
+  const handleRouteOptimized = (optimizedRepartos) => {
+    setRepartos(optimizedRepartos);
+  };
+
   return (
     <>
       <div className="container mx-auto p-4 sm:p-6 lg:p-8">
@@ -211,8 +216,9 @@ function App() {
                 onUpdateReparto={handleUpdateReparto}
                 onDeleteReparto={handleDeleteReparto}
                 onClearRepartos={handleClearRepartos}
-                isAdmin={hasElevatedPermissions} // Pasamos la nueva variable de permisos
+                isAdmin={hasElevatedPermissions}
                 session={session}
+                onRouteOptimized={handleRouteOptimized} // <-- Pasamos la nueva función
               />
             </main>
           </div>

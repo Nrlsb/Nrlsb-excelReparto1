@@ -6,7 +6,8 @@ import {
   updateReparto, 
   deleteReparto, 
   exportRepartos,
-  clearAllRepartos
+  clearAllRepartos,
+  optimizeRoute // <-- Importamos la nueva función
 } from '../controllers/repartoController.js';
 import authMiddleware from '../middleware/authMiddleware.js';
 
@@ -16,6 +17,7 @@ const router = express.Router();
 router.get('/', authMiddleware, getRepartos);
 router.post('/', authMiddleware, createReparto);
 router.get('/export', authMiddleware, exportRepartos);
+router.post('/optimize', authMiddleware, optimizeRoute); // <-- Nueva ruta para optimizar
 
 // --- CORRECCIÓN DE ORDEN ---
 // La ruta específica '/all' debe declararse ANTES de la ruta genérica con parámetros como '/:id'
