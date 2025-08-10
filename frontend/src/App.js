@@ -12,7 +12,7 @@ import Account from './components/Account';
 import RepartoForm from './components/RepartoForm';
 import RepartosTable from './components/RepartosTable';
 import ConfirmModal from './components/ConfirmModal';
-import Ruta from './components/Ruta'; // <-- Importamos el nuevo componente
+import Ruta from './components/Ruta';
 
 function App() {
   const [session, setSession] = useState(null);
@@ -21,8 +21,8 @@ function App() {
   const [userRole, setUserRole] = useState('user');
   const [showAccountModal, setShowAccountModal] = useState(false);
   
-  const [activeTab, setActiveTab] = useState('carga'); // 'carga' o 'ruta'
-  const [optimizedData, setOptimizedData] = useState(null); // { repartos, polyline }
+  const [activeTab, setActiveTab] = useState('carga');
+  const [optimizedData, setOptimizedData] = useState(null);
   const [isOptimizing, setIsOptimizing] = useState(false);
 
   const [confirmState, setConfirmState] = useState({
@@ -181,7 +181,8 @@ function App() {
     const dataToExport = repartos.map(r => ({
       'ID': r.id, 'Destino': r.destino, 'Dirección': r.direccion,
       'Horarios': r.horarios, 'Bultos': r.bultos,
-      ...(isAdmin && {'Agregado por': r.agregado_por})
+      // --- CORRECCIÓN: Usar hasElevatedPermissions en lugar de isAdmin ---
+      ...(hasElevatedPermissions && {'Agregado por': r.agregado_por})
     }));
     const ws = XLSX.utils.json_to_sheet(dataToExport);
     const wb = XLSX.utils.book_new();
@@ -211,6 +212,19 @@ function App() {
       toast.error(`No se pudo exportar el archivo: ${error.message}`);
     }
   };
+  
+  const handleUpdateProfile = async (username) => {
+    try {
+      await api.put('/profile', { username });
+      await supabase.auth.refreshSession();
+      toast.success('Perfil actualizado.');
+      setShowAccountModal(false);
+    } catch (error) {
+      toast.error('No se pudo actualizar el perfil.');
+      console.error('Error updating profile:', error);
+    }
+  };
+
 
   const closeConfirmModal = () => setConfirmState({ isOpen: false });
 
@@ -268,7 +282,7 @@ function App() {
           </div>
         )}
       </div>
-      {showAccountModal && <Account session={session} onClose={() => setShowAccountModal(false)} onSave={(username) => { /* Lógica de guardado */ }} />}
+      {showAccountModal && <Account session={session} onClose={() => setShowAccountModal(false)} onSave={handleUpdateProfile} />}
       <ConfirmModal isOpen={confirmState.isOpen} onClose={closeConfirmModal} onConfirm={confirmState.onConfirm} title={confirmState.title}>
         {confirmState.message}
       </ConfirmModal>
