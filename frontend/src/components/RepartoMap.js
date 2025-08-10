@@ -109,8 +109,8 @@ function RepartoMap({ repartos, rutaOptimizada, userLocation }) {
         </div>
       )}
       <MapContainer 
-        center={userLocation ? [userLocation.lat, userLocation.lon] : [-31.6106, -60.6973]} 
-        zoom={10} 
+        center={userLocation ? [userLocation.lat, userLocation.lon] : [-31.4433, -60.9333]} 
+        zoom={13} 
         style={{ height: '100%', width: '100%', borderRadius: '0.5rem' }}
         placeholder={<MapPlaceholder />}
       >
