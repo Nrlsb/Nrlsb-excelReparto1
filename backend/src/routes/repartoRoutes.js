@@ -1,22 +1,29 @@
+// backend/src/routes/repartoRoutes.js
 import express from 'express';
-import * as repartoController from '../controllers/repartoController.js';
-// La importación { authMiddleware } ahora funcionará correctamente
-import { authMiddleware } from '../middleware/authMiddleware.js';
+import { 
+  getRepartos, 
+  createReparto, 
+  updateReparto, 
+  deleteReparto, 
+  exportRepartos,
+  clearAllRepartos
+} from '../controllers/repartoController.js';
+import authMiddleware from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-// Aplicar el middleware a todas las rutas de repartos
-router.use(authMiddleware);
+// Rutas generales
+router.get('/', authMiddleware, getRepartos);
+router.post('/', authMiddleware, createReparto);
+router.get('/export', authMiddleware, exportRepartos);
 
-router.post('/optimize', repartoController.optimizeRoute);
+// --- CORRECCIÓN DE ORDEN ---
+// La ruta específica '/all' debe declararse ANTES de la ruta genérica con parámetros como '/:id'
+// para asegurar que sea detectada correctamente por Express.
+router.delete('/all', authMiddleware, clearAllRepartos);
 
-router.route('/')
-    .get(repartoController.getRepartos)
-    .post(repartoController.createReparto);
-
-router.route('/:id')
-    .get(repartoController.getRepartoById)
-    .put(repartoController.updateReparto)
-    .delete(repartoController.deleteReparto);
+// Rutas específicas por ID
+router.put('/:id', authMiddleware, updateReparto);
+router.delete('/:id', authMiddleware, deleteReparto);
 
 export default router;

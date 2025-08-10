@@ -1,83 +1,174 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import * as XLSX from 'xlsx';
+import { toast } from 'react-toastify';
 import RepartoRow from './RepartoRow';
-import ConfirmModal from './ConfirmModal';
-import RepartoMap from './RepartoMap'; // 1. Importar el componente del mapa
+import api from '../services/api'; // Importamos la instancia de api
 
-const RepartosTable = ({ repartos, onEdit, onDelete, onUpdate }) => {
-  const [deletingId, setDeletingId] = useState(null);
-  // 2. Estado para controlar la visibilidad del mapa
-  const [showMap, setShowMap] = useState(false);
+function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, onDeleteReparto, isAdmin, session }) {
+  const [sortKey, setSortKey] = useState('id');
+  const [sortOrder, setSortOrder] = useState('asc');
 
-  const handleDeleteClick = (id) => {
-    setDeletingId(id);
-  };
+  const sortedRepartos = useMemo(() => {
+    const sorted = [...repartos];
+    if (sortKey) {
+      sorted.sort((a, b) => {
+        const valA = a[sortKey];
+        const valB = b[sortKey];
 
-  const handleConfirmDelete = () => {
-    if (deletingId) {
-      onDelete(deletingId);
-      setDeletingId(null);
+        if (valA < valB) {
+          return sortOrder === 'asc' ? -1 : 1;
+        }
+        if (valA > valB) {
+          return sortOrder === 'asc' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    return sorted;
+  }, [repartos, sortKey, sortOrder]);
+
+  const handleSort = (key) => {
+    if (sortKey === key) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey(key);
+      setSortOrder('asc');
     }
   };
 
-  const handleCancelDelete = () => {
-    setDeletingId(null);
+  const SortableHeader = ({ columnKey, children }) => {
+    const isSorted = sortKey === columnKey;
+    const arrow = isSorted ? (sortOrder === 'asc' ? ' ▲' : ' ▼') : '';
+    return (
+      <th 
+        className="p-4 text-left bg-gradient-to-r from-purple-600 to-indigo-600 text-white uppercase text-sm font-bold tracking-wider cursor-pointer hover:bg-gradient-to-l"
+        onClick={() => handleSort(columnKey)}
+      >
+        {children}{arrow}
+      </th>
+    );
   };
+
+  const handleSimpleExportExcel = () => {
+    if (sortedRepartos.length === 0) {
+      toast.info('No hay repartos para exportar.');
+      return;
+    }
+    const datosParaExportar = sortedRepartos.map(r => {
+      const baseData = {
+        'ID': r.id,
+        'Destino': r.destino,
+        'Dirección': r.direccion,
+        'Horarios': r.horarios,
+        'Bultos': r.bultos,
+        'Fecha de Creación': new Date(r.created_at).toLocaleString()
+      };
+      if (isAdmin) {
+        baseData['Agregado por'] = r.agregado_por;
+      }
+      return baseData;
+    });
+
+    const ws = XLSX.utils.json_to_sheet(datosParaExportar);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Repartos");
+    XLSX.writeFile(wb, "repartos.xlsx");
+  };
+
+  // --- NUEVA FUNCIÓN para exportar con la plantilla del backend ---
+  const handleTemplateExport = async () => {
+    if (!session) {
+        toast.error("Debes iniciar sesión para exportar.");
+        return;
+    }
+    try {
+        const response = await api.get('/repartos/export', {
+            responseType: 'blob', // Importante para manejar la respuesta como un archivo
+        });
+
+        const disposition = response.headers['content-disposition'];
+        let filename = 'repartos.xlsx';
+        if (disposition && disposition.indexOf('attachment') !== -1) {
+            const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+            const matches = filenameRegex.exec(disposition);
+            if (matches != null && matches[1]) {
+                filename = matches[1].replace(/['"]/g, '');
+            }
+        }
+        
+        const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+        toast.success('Exportación con plantilla exitosa.');
+
+    } catch (error) {
+        console.error("Error al exportar a Excel con plantilla:", error);
+        toast.error(`No se pudo exportar el archivo: ${error.message}`);
+    }
+  };
+
+  const colSpan = isAdmin ? 7 : 6;
 
   return (
     <div className="overflow-x-auto">
-      {/* 3. Botón para abrir el mapa */}
-      <div className="my-4">
-        <button
-          onClick={() => setShowMap(true)}
-          disabled={repartos.length < 2}
-          className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-400"
-        >
-          Optimizar y Ver Ruta en Mapa
+      <div className="flex flex-wrap gap-4 mb-5">
+        <button 
+          className="px-5 py-2 border-none rounded-lg text-sm font-semibold cursor-pointer transition-transform duration-200 uppercase tracking-wider text-white bg-gradient-to-r from-green-500 to-teal-500 hover:scale-105" 
+          onClick={handleSimpleExportExcel}>
+            📊 Exportar a Excel
+        </button>
+        {/* --- BOTÓN RESTAURADO --- */}
+        <button 
+          className="px-5 py-2 border-none rounded-lg text-sm font-semibold cursor-pointer transition-transform duration-200 uppercase tracking-wider text-white bg-gradient-to-r from-blue-500 to-sky-500 hover:scale-105" 
+          onClick={handleTemplateExport}>
+            📋 Exportar con Plantilla
+        </button>
+        <button 
+          className="px-5 py-2 border-none rounded-lg text-sm font-semibold cursor-pointer transition-transform duration-200 uppercase tracking-wider text-white bg-gradient-to-r from-red-500 to-orange-500 hover:scale-105" 
+          onClick={onClearRepartos}>
+            🗑️ Vaciar Todo
         </button>
       </div>
-
-      <table className="min-w-full bg-white">
-        <thead>
-          <tr>
-            <th className="py-2 px-4 border-b">Cliente</th>
-            <th className="py-2 px-4 border-b">Dirección</th>
-            <th className="py-2 px-4 border-b">Teléfono</th>
-            <th className="py-2 px-4 border-b">Paquete</th>
-            <th className="py-2 px-4 border-b">Estado</th>
-            <th className="py-2 px-4 border-b">Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          {repartos.map((reparto) => (
-            <RepartoRow
-              key={reparto.id}
-              reparto={reparto}
-              onEdit={onEdit}
-              onDelete={handleDeleteClick}
-              onUpdate={onUpdate}
-            />
-          ))}
-        </tbody>
-      </table>
-
-      {deletingId && (
-        <ConfirmModal
-          message="¿Estás seguro de que deseas eliminar este reparto?"
-          onConfirm={handleConfirmDelete}
-          onCancel={handleCancelDelete}
-        />
-      )}
-
-      {/* 4. Modal para mostrar el mapa */}
-      {showMap && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-          <div className="bg-white p-4 rounded-lg shadow-lg max-w-4xl w-full">
-            <RepartoMap repartos={repartos} onClose={() => setShowMap(false)} />
-          </div>
-        </div>
-      )}
+      <div className="bg-white rounded-xl shadow-md overflow-hidden">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr>
+              <SortableHeader columnKey="id">ID</SortableHeader>
+              <SortableHeader columnKey="destino">Destino</SortableHeader>
+              <SortableHeader columnKey="direccion">Dirección</SortableHeader>
+              <SortableHeader columnKey="horarios">Horarios</SortableHeader>
+              <SortableHeader columnKey="bultos">Bultos</SortableHeader>
+              {isAdmin && <SortableHeader columnKey="agregado_por">Agregado por</SortableHeader>}
+              <th className="p-4 text-center bg-gradient-to-r from-purple-600 to-indigo-600 text-white uppercase text-sm font-bold tracking-wider">Acciones</th> 
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={colSpan} className="text-center p-10 text-gray-500">Cargando...</td></tr>
+            ) : sortedRepartos.length > 0 ? (
+              sortedRepartos.map(reparto => (
+                <RepartoRow 
+                  key={reparto.id} 
+                  reparto={reparto} 
+                  onUpdate={onUpdateReparto}
+                  onDelete={onDeleteReparto}
+                  isAdmin={isAdmin}
+                />
+              ))
+            ) : (
+              <tr><td colSpan={colSpan} className="text-center p-10 text-gray-500">No hay repartos cargados.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
-};
+}
 
 export default RepartosTable;

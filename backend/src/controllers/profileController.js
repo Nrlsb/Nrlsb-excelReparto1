@@ -1,53 +1,53 @@
+// backend/src/controllers/profileController.js
 import supabase from '../config/supabaseClient.js';
 
-/**
- * Obtiene el perfil del usuario autenticado.
- */
+// La función getProfile no se usa, pero la dejamos por si se necesita en el futuro.
 export const getProfile = async (req, res) => {
-  const userId = req.user.id;
+    try {
+        const { id } = req.params;
+        const { data, error } = await supabase
+            .from('profiles')
+            .select(`username, website, avatar_url`)
+            .eq('id', id)
+            .single();
 
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('username, website, avatar_url')
-    .eq('id', userId)
-    .single();
-
-  if (error) {
-    // Si no existe el perfil, podemos devolver un objeto vacío o un 404
-    if (error.code === 'PGRST116') {
-        return res.status(200).json(null); // No profile found is not a server error
+        if (error) throw error;
+        res.status(200).json(data);
+    } catch (err) {
+        res.status(500).json({ error: 'No se pudo obtener el perfil.', details: err.message });
     }
-    console.error('Error fetching profile:', error);
-    return res.status(400).json({ error: error.message });
-  }
-
-  res.status(200).json(data);
 };
 
-/**
- * Actualiza el perfil del usuario autenticado.
- * Puede crear el perfil si no existe (upsert).
- */
 export const updateProfile = async (req, res) => {
-  const userId = req.user.id;
-  const { username, website, avatar_url } = req.body;
+    try {
+        // Usar el ID del usuario autenticado que viene del middleware
+        const { id } = req.user;
+        const { username, website, avatar_url } = req.body;
 
-  const { data, error } = await supabase
-    .from('profiles')
-    .upsert({
-      id: userId,
-      username,
-      website,
-      avatar_url,
-      updated_at: new Date(),
-    })
-    .select()
-    .single();
+        // 1. Actualizar los metadatos en la tabla de autenticación de Supabase
+        const { error: authError } = await supabase.auth.admin.updateUserById(
+            id,
+            { user_metadata: { username: username } }
+        );
 
-  if (error) {
-    console.error('Error updating profile:', error);
-    return res.status(400).json({ error: error.message });
-  }
+        if (authError) throw authError;
 
-  res.status(200).json(data);
+        // 2. Actualizar la tabla pública de perfiles
+        const { error: profileError } = await supabase.from('profiles').upsert({
+            id,
+            username,
+            website,
+            avatar_url,
+            updated_at: new Date(),
+        });
+
+        if (profileError) throw profileError;
+        
+        // El trigger 'on_profile_updated' en la base de datos se encargará
+        // de actualizar el campo 'agregado_por' en la tabla de repartos.
+
+        res.status(200).json({ message: 'Perfil actualizado correctamente.' });
+    } catch (err) {
+        res.status(500).json({ error: 'No se pudo actualizar el perfil.', details: err.message });
+    }
 };
