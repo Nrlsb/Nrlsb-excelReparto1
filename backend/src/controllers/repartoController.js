@@ -3,16 +3,11 @@ import supabase from '../config/supabaseClient.js';
 import ExcelJS from 'exceljs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import axios from 'axios'; // Importamos Axios
+import axios from 'axios';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-/**
- * Obtiene el rol de un usuario desde la tabla de perfiles.
- * @param {string} userId - El UUID del usuario.
- * @returns {Promise<string>} El rol del usuario (ej. 'admin', 'especial', 'user').
- */
 async function getUserRole(userId) {
     const { data, error } = await supabase
         .from('profiles')
@@ -27,7 +22,6 @@ async function getUserRole(userId) {
     return data.role;
 }
 
-// --- FUNCIÓN DE OPTIMIZACIÓN MODIFICADA PARA USAR GOOGLE MAPS ---
 export const optimizeRoute = async (req, res) => {
     const { repartos } = req.body;
     const apiKey = process.env.GOOGLE_MAPS_API_KEY;
@@ -41,46 +35,64 @@ export const optimizeRoute = async (req, res) => {
     }
 
     try {
-        // Asumimos que el primer reparto es el origen y el último es el destino final.
-        // Los intermedios son los puntos de paso (waypoints).
-        const origin = repartos[0].direccion;
-        const destination = repartos[repartos.length - 1].direccion;
-        const waypoints = repartos.slice(1, -1).map(r => r.direccion);
+        const geocodePromises = repartos.map(reparto => {
+            const params = new URLSearchParams({ address: reparto.direccion, key: apiKey }).toString();
+            const url = `https://maps.googleapis.com/maps/api/geocode/json?${params}`;
+            return axios.get(url);
+        });
 
-        const params = new URLSearchParams({
+        const geocodeResponses = await Promise.all(geocodePromises);
+        
+        const repartosWithCoords = repartos.map((reparto, index) => {
+            const geocodeData = geocodeResponses[index].data;
+            if (geocodeData.status !== 'OK' || !geocodeData.results[0]) {
+                // Error más específico si una dirección falla
+                throw new Error(`No se pudo geocodificar la dirección: "${reparto.direccion}". Razón: ${geocodeData.status}`);
+            }
+            const location = geocodeData.results[0].geometry.location;
+            return { ...reparto, location };
+        });
+
+        const origin = `${repartosWithCoords[0].location.lat},${repartosWithCoords[0].location.lng}`;
+        const destination = `${repartosWithCoords[repartosWithCoords.length - 1].location.lat},${repartosWithCoords[repartosWithCoords.length - 1].location.lng}`;
+        const waypoints = repartosWithCoords.slice(1, -1).map(r => `${r.location.lat},${r.location.lng}`);
+
+        const directionParams = new URLSearchParams({
             origin: origin,
             destination: destination,
             waypoints: `optimize:true|${waypoints.join('|')}`,
             key: apiKey,
         }).toString();
 
-        const url = `https://maps.googleapis.com/maps/api/directions/json?${params}`;
+        const directionsUrl = `https://maps.googleapis.com/maps/api/directions/json?${directionParams}`;
+        const directionsResponse = await axios.get(directionsUrl);
+        const directionsData = directionsResponse.data;
 
-        const response = await axios.get(url);
-        const data = response.data;
-
-        if (data.status !== 'OK') {
-            throw new Error(`La API de Google Maps devolvió un error: ${data.status} - ${data.error_message || ''}`);
+        if (directionsData.status !== 'OK') {
+            throw new Error(`Error de la API de Google Directions: ${directionsData.status} - ${directionsData.error_message || 'Sin detalles adicionales.'}`);
         }
 
-        const optimizedOrder = data.routes[0].waypoint_order;
+        const route = directionsData.routes[0];
+        const optimizedOrder = route.waypoint_order;
+        const polyline = route.overview_polyline.points;
 
-        // Reconstruimos el array de repartos en el orden optimizado.
-        const originalWaypoints = repartos.slice(1, -1);
+        const originalWaypoints = repartosWithCoords.slice(1, -1);
         const optimizedRepartos = [
-            repartos[0], // El origen siempre es el primero
+            repartosWithCoords[0],
             ...optimizedOrder.map(index => originalWaypoints[index]),
-            repartos[repartos.length - 1] // El destino siempre es el último
+            repartosWithCoords[repartosWithCoords.length - 1]
         ];
 
-        res.status(200).json(optimizedRepartos);
+        res.status(200).json({ optimizedRepartos, polyline });
 
     } catch (err) {
+        // Devuelve el mensaje de error específico al frontend
         console.error('Error en la optimización de ruta con Google Maps:', err.message);
         res.status(500).json({ error: 'No se pudo optimizar la ruta.', details: err.message });
     }
 };
 
+// ... (el resto de las funciones como getRepartos, createReparto, etc. permanecen igual)
 
 export const getRepartos = async (req, res) => {
     try {

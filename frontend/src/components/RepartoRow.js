@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 
-function RepartoRow({ reparto, onUpdate, onDelete, isAdmin }) { // Recibir isAdmin
+// Añadimos orderNumber para mostrar el número de la parada
+function RepartoRow({ reparto, onUpdate, onDelete, isAdmin, orderNumber }) { 
   const [isEditing, setIsEditing] = useState(false);
   const [editedReparto, setEditedReparto] = useState({ ...reparto });
 
@@ -28,7 +29,6 @@ function RepartoRow({ reparto, onUpdate, onDelete, isAdmin }) { // Recibir isAdm
         <td className="p-4 border-b border-gray-200"><input type="text" name="direccion" value={editedReparto.direccion} onChange={handleInputChange} className={commonInputClass} /></td>
         <td className="p-4 border-b border-gray-200"><input type="text" name="horarios" value={editedReparto.horarios} onChange={handleInputChange} className={commonInputClass} /></td>
         <td className="p-4 border-b border-gray-200"><input type="number" name="bultos" value={editedReparto.bultos} onChange={handleInputChange} min="1" className={commonInputClass} /></td>
-        {/* Mostrar el nombre del creador (no editable) */}
         {isAdmin && <td className="p-4 border-b border-gray-200 text-gray-700">{reparto.agregado_por}</td>}
         <td className="p-4 border-b border-gray-200 text-center">
           <div className="flex justify-center gap-2">
@@ -42,12 +42,20 @@ function RepartoRow({ reparto, onUpdate, onDelete, isAdmin }) { // Recibir isAdm
 
   return (
     <tr className="hover:bg-gray-50 transition-colors duration-200">
-      <td className="p-4 border-b border-gray-200 text-gray-700 font-medium">{reparto.id}</td>
+      <td className="p-4 border-b border-gray-200 text-gray-700 font-medium">
+        {/* Mostramos el número de orden si está disponible */}
+        {orderNumber ? (
+            <span className="bg-blue-500 text-white rounded-full h-6 w-6 flex items-center justify-center font-bold text-xs">
+                {orderNumber}
+            </span>
+        ) : (
+            reparto.id
+        )}
+      </td>
       <td className="p-4 border-b border-gray-200 text-gray-700">{reparto.destino}</td>
       <td className="p-4 border-b border-gray-200 text-gray-700">{reparto.direccion}</td>
       <td className="p-4 border-b border-gray-200 text-gray-700">{reparto.horarios}</td>
       <td className="p-4 border-b border-gray-200 text-gray-700">{reparto.bultos}</td>
-      {/* Celda condicional para admin */}
       {isAdmin && <td className="p-4 border-b border-gray-200 text-gray-700">{reparto.agregado_por}</td>}
       <td className="p-4 border-b border-gray-200 text-center">
         <div className="flex justify-center gap-2">

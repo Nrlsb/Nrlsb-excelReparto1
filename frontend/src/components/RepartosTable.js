@@ -2,14 +2,17 @@ import React, { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { toast } from 'react-toastify';
 import RepartoRow from './RepartoRow';
-import api from '../services/api'; // Importamos la instancia de api
+import api from '../services/api';
 
-function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, onDeleteReparto, isAdmin, session, onRouteOptimized }) {
+function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, onDeleteReparto, isAdmin, session, onRouteOptimized, onToggleMap, showMap }) {
   const [sortKey, setSortKey] = useState('id');
   const [sortOrder, setSortOrder] = useState('asc');
-  const [isOptimizing, setIsOptimizing] = useState(false); // Nuevo estado para la optimización
+  const [isOptimizing, setIsOptimizing] = useState(false);
 
   const sortedRepartos = useMemo(() => {
+    if (showMap) {
+        return repartos;
+    }
     const sorted = [...repartos];
     if (sortKey) {
       sorted.sort((a, b) => {
@@ -26,9 +29,13 @@ function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, on
       });
     }
     return sorted;
-  }, [repartos, sortKey, sortOrder]);
+  }, [repartos, sortKey, sortOrder, showMap]);
 
   const handleSort = (key) => {
+    if (showMap) {
+        toast.info('Desactiva la vista de mapa para ordenar la tabla manualmente.');
+        return;
+    }
     if (sortKey === key) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
     } else {
@@ -39,7 +46,7 @@ function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, on
 
   const SortableHeader = ({ columnKey, children }) => {
     const isSorted = sortKey === columnKey;
-    const arrow = isSorted ? (sortOrder === 'asc' ? ' ▲' : ' ▼') : '';
+    const arrow = isSorted && !showMap ? (sortOrder === 'asc' ? ' ▲' : ' ▼') : '';
     return (
       <th 
         className="p-4 text-left bg-gradient-to-r from-purple-600 to-indigo-600 text-white uppercase text-sm font-bold tracking-wider cursor-pointer hover:bg-gradient-to-l"
@@ -113,7 +120,6 @@ function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, on
     }
   };
 
-  // --- NUEVA FUNCIÓN para optimizar la ruta ---
   const handleOptimizeRoute = async () => {
     if (repartos.length < 2) {
       toast.info('Necesitas al menos 2 repartos para optimizar la ruta.');
@@ -121,12 +127,14 @@ function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, on
     }
     setIsOptimizing(true);
     try {
-      const { data: optimizedData } = await api.post('/repartos/optimize', { repartos });
-      onRouteOptimized(optimizedData);
+      const { data } = await api.post('/repartos/optimize', { repartos });
+      onRouteOptimized(data);
       toast.success('Ruta optimizada con éxito.');
-      setSortKey(null); // Desactivamos el ordenamiento manual para ver el orden de la ruta
+      setSortKey(null);
     } catch (error) {
-      toast.error('No se pudo optimizar la ruta.');
+      // Muestra el error detallado que viene del backend
+      const errorMessage = error.response?.data?.details || error.response?.data?.error || 'No se pudo optimizar la ruta.';
+      toast.error(errorMessage);
       console.error('Error optimizing route:', error);
     } finally {
       setIsOptimizing(false);
@@ -139,13 +147,18 @@ function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, on
   return (
     <div className="overflow-x-auto">
       <div className="flex flex-wrap gap-4 mb-5">
-        {/* --- NUEVO BOTÓN DE OPTIMIZACIÓN --- */}
         <button 
           className="px-5 py-2 border-none rounded-lg text-sm font-semibold cursor-pointer transition-transform duration-200 uppercase tracking-wider text-white bg-gradient-to-r from-cyan-500 to-blue-500 hover:scale-105 disabled:opacity-60"
           onClick={handleOptimizeRoute}
           disabled={isOptimizing || loading}
         >
           {isOptimizing ? 'Optimizando...' : '🗺️ Optimizar Ruta'}
+        </button>
+        <button 
+          className="px-5 py-2 border-none rounded-lg text-sm font-semibold cursor-pointer transition-transform duration-200 uppercase tracking-wider text-white bg-gradient-to-r from-indigo-500 to-purple-500 hover:scale-105"
+          onClick={onToggleMap}
+        >
+          {showMap ? 'Ocultar Mapa' : 'Ver Mapa'}
         </button>
         <button 
           className="px-5 py-2 border-none rounded-lg text-sm font-semibold cursor-pointer transition-transform duration-200 uppercase tracking-wider text-white bg-gradient-to-r from-green-500 to-teal-500 hover:scale-105" 
@@ -180,13 +193,15 @@ function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, on
             {loading ? (
               <tr><td colSpan={colSpan} className="text-center p-10 text-gray-500">Cargando...</td></tr>
             ) : sortedRepartos.length > 0 ? (
-              sortedRepartos.map(reparto => (
+              sortedRepartos.map((reparto, index) => (
                 <RepartoRow 
                   key={reparto.id} 
                   reparto={reparto} 
                   onUpdate={onUpdateReparto}
                   onDelete={onDeleteReparto}
                   isAdmin={isAdmin}
+                  // Añadimos el número de orden cuando el mapa está activo
+                  orderNumber={showMap ? index + 1 : null}
                 />
               ))
             ) : (
