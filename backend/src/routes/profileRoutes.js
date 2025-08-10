@@ -1,15 +1,17 @@
-// backend/src/routes/profileRoutes.js
-import { Router } from 'express';
-import { updateProfile } from '../controllers/profileController.js';
-import authMiddleware from '../middleware/authMiddleware.js';
+import express from 'express';
+// Importamos todos los controladores como un objeto
+import * as profileController from '../controllers/profileController.js';
+// La importación ahora es "nombrada" (con llaves), igual que en repartoRoutes.js
+import { authMiddleware } from '../middleware/authMiddleware.js';
 
-const router = Router();
+const router = express.Router();
 
-// Todas las rutas de perfil requieren autenticación
+// Aplicar el middleware a todas las rutas de perfil
 router.use(authMiddleware);
 
-// PUT /api/profile -> Actualiza el perfil del usuario autenticado
-// Se corrige la ruta de '/profile' a '/' para que sea /api/profile
-router.put('/', updateProfile);
+router.route('/')
+    .get(profileController.getProfile)
+    .put(profileController.updateProfile);
 
+// Usamos export default para el router
 export default router;
