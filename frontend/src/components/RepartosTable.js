@@ -10,10 +10,13 @@ function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, on
   const [isOptimizing, setIsOptimizing] = useState(false);
 
   const sortedRepartos = useMemo(() => {
+    // --- CORRECCIÓN: Asegurarse de que 'repartos' sea siempre un array ---
+    const repartosArray = Array.isArray(repartos) ? repartos : [];
+
     if (showMap) {
-        return repartos;
+        return repartosArray;
     }
-    const sorted = [...repartos];
+    const sorted = [...repartosArray];
     if (sortKey) {
       sorted.sort((a, b) => {
         const valA = a[sortKey];
@@ -132,7 +135,6 @@ function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, on
       toast.success('Ruta optimizada con éxito.');
       setSortKey(null);
     } catch (error) {
-      // Muestra el error detallado que viene del backend
       const errorMessage = error.response?.data?.details || error.response?.data?.error || 'No se pudo optimizar la ruta.';
       toast.error(errorMessage);
       console.error('Error optimizing route:', error);
@@ -200,7 +202,6 @@ function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, on
                   onUpdate={onUpdateReparto}
                   onDelete={onDeleteReparto}
                   isAdmin={isAdmin}
-                  // Añadimos el número de orden cuando el mapa está activo
                   orderNumber={showMap ? index + 1 : null}
                 />
               ))
