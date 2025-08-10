@@ -1,7 +1,8 @@
 // src/components/RepartoForm.js
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { toast } from 'react-toastify';
-import axios from 'axios';
+import axios from 'axios'; // Usaremos la instancia global de axios
+import api from '../services/api'; // Importamos la instancia configurada
 import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import { Icon } from 'leaflet';
 
@@ -64,35 +65,23 @@ function RepartoForm({ onAddReparto, session }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [sugerencias, setSugerencias] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
-  const debouncedDireccion = useDebounce(direccion, 400); // Reducimos un poco el delay
+  const debouncedDireccion = useDebounce(direccion, 400);
   
   const [markerPosition, setMarkerPosition] = useState(null);
-  const GOOGLE_API_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
 
-  // --- CAMBIO: Lógica para buscar sugerencias con Google Places API ---
+  // --- CAMBIO: Lógica para buscar sugerencias a través de nuestro backend ---
   useEffect(() => {
     const buscarSugerencias = async () => {
       if (debouncedDireccion.length < 3) {
         setSugerencias([]);
         return;
       }
-      if (!GOOGLE_API_KEY) {
-        // No mostramos toast para no ser molestos, pero sí un error en consola.
-        console.error("La clave de API de Google Maps no está configurada en el frontend.");
-        return;
-      }
       setIsSearching(true);
       try {
-        // Usamos un proxy de CORS para evitar problemas en desarrollo. En producción, la restricción de API Key es suficiente.
-        const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
-        const apiUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/place/autocomplete/json`;
-        
-        const response = await axios.get(apiUrl, {
+        // Apuntamos a nuestra nueva ruta del backend
+        const response = await api.get('/google/places-autocomplete', {
           params: {
             input: debouncedDireccion,
-            key: GOOGLE_API_KEY,
-            components: 'country:ar', // Limitamos la búsqueda a Argentina
-            language: 'es', // Pedimos resultados en español
           }
         });
 
@@ -111,24 +100,18 @@ function RepartoForm({ onAddReparto, session }) {
       }
     };
     buscarSugerencias();
-  }, [debouncedDireccion, GOOGLE_API_KEY]);
+  }, [debouncedDireccion]);
 
-  // --- CAMBIO: Lógica para obtener coordenadas al hacer clic en una sugerencia ---
+  // --- CAMBIO: Lógica para obtener coordenadas a través de nuestro backend ---
   const handleSuggestionClick = async (sugerencia) => {
-    // Usamos el texto completo de la sugerencia para el campo de dirección
     setDireccion(sugerencia.description);
-    setSugerencias([]); // Ocultamos la lista de sugerencias
-
-    if (!GOOGLE_API_KEY) return;
+    setSugerencias([]);
 
     try {
-      const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
-      const apiUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/geocode/json`;
-
-      const response = await axios.get(apiUrl, {
+      // Apuntamos a nuestra nueva ruta del backend
+      const response = await api.get('/google/geocode', {
         params: {
           place_id: sugerencia.place_id,
-          key: GOOGLE_API_KEY,
         }
       });
       
