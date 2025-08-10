@@ -84,13 +84,12 @@ function RepartoForm({ onAddReparto, session }) {
       }
       setIsSearching(true);
       try {
-        // CORRECCIÓN: Se agrega la ciudad y provincia a la búsqueda para mayor precisión
-        const fullQuery = `${debouncedDireccion}, Esperanza, Santa Fe`;
-        let url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullQuery)}&countrycodes=ar`;
+        let url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(debouncedDireccion)}&countrycodes=ar`;
         if (userCoords) {
           const { lon, lat } = userCoords;
           url += `&viewbox=${lon-0.5},${lat+0.5},${lon+0.5},${lat-0.5}&bounded=1`;
         }
+        // CORRECCIÓN: Se elimina la cabecera 'User-Agent'
         const response = await axios.get(url);
         setSugerencias(response.data);
       } catch (error) {
