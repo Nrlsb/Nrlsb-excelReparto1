@@ -58,8 +58,8 @@ function RepartoMap({ repartos, rutaOptimizada, userLocation }) {
       }
       setLoading(true);
       const promises = repartos.map(reparto =>
-        // CORRECCIÓN: Se elimina la cabecera 'User-Agent'
-        axios.get(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(reparto.direccion + ', Argentina')}`)
+        // CORRECCIÓN: Se envía solo la dirección para mejorar la precisión.
+        axios.get(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(reparto.direccion)}`)
       );
 
       try {
