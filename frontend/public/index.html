@@ -12,17 +12,29 @@
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Estilos de Leaflet para el mapa -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
+      xintegrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A=="
+      crossorigin=""/>
+
     <title>Gestión de Repartos</title>
-    <!-- CORRECCIÓN: Estilos para centrar el contenido -->
     <style>
       body {
-        background-color: #f3f4f6; /* Un color de fondo suave */
+        background-color: #f3f4f6;
       }
       .container {
-        max-width: 1280px; /* Ancho máximo para la página */
+        max-width: 1280px;
         margin-left: auto;
         margin-right: auto;
         padding: 1rem;
+      }
+      /* Aseguramos que el mapa tenga una altura definida */
+      .leaflet-container {
+        height: 450px;
+        width: 100%;
+        border-radius: 0.75rem; /* 12px */
+        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
       }
     </style>
   </head>
