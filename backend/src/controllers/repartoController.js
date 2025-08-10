@@ -35,8 +35,12 @@ export const optimizeRoute = async (req, res) => {
     }
 
     try {
+        // 1. Geocodificar todas las direcciones para obtener coordenadas
         const geocodePromises = repartos.map(reparto => {
-            const params = new URLSearchParams({ address: reparto.direccion, key: apiKey }).toString();
+            // --- CAMBIO CLAVE: Hacemos la dirección más específica ---
+            const fullAddress = `${reparto.direccion}, Esperanza, Santa Fe, Argentina`;
+            // ---------------------------------------------------------
+            const params = new URLSearchParams({ address: fullAddress, key: apiKey }).toString();
             const url = `https://maps.googleapis.com/maps/api/geocode/json?${params}`;
             return axios.get(url);
         });
@@ -46,13 +50,13 @@ export const optimizeRoute = async (req, res) => {
         const repartosWithCoords = repartos.map((reparto, index) => {
             const geocodeData = geocodeResponses[index].data;
             if (geocodeData.status !== 'OK' || !geocodeData.results[0]) {
-                // Error más específico si una dirección falla
                 throw new Error(`No se pudo geocodificar la dirección: "${reparto.direccion}". Razón: ${geocodeData.status}`);
             }
             const location = geocodeData.results[0].geometry.location;
             return { ...reparto, location };
         });
 
+        // 2. Obtener la ruta optimizada
         const origin = `${repartosWithCoords[0].location.lat},${repartosWithCoords[0].location.lng}`;
         const destination = `${repartosWithCoords[repartosWithCoords.length - 1].location.lat},${repartosWithCoords[repartosWithCoords.length - 1].location.lng}`;
         const waypoints = repartosWithCoords.slice(1, -1).map(r => `${r.location.lat},${r.location.lng}`);
@@ -76,6 +80,7 @@ export const optimizeRoute = async (req, res) => {
         const optimizedOrder = route.waypoint_order;
         const polyline = route.overview_polyline.points;
 
+        // 3. Reconstruir el array de repartos en el orden optimizado
         const originalWaypoints = repartosWithCoords.slice(1, -1);
         const optimizedRepartos = [
             repartosWithCoords[0],
@@ -86,13 +91,13 @@ export const optimizeRoute = async (req, res) => {
         res.status(200).json({ optimizedRepartos, polyline });
 
     } catch (err) {
-        // Devuelve el mensaje de error específico al frontend
         console.error('Error en la optimización de ruta con Google Maps:', err.message);
         res.status(500).json({ error: 'No se pudo optimizar la ruta.', details: err.message });
     }
 };
 
-// ... (el resto de las funciones como getRepartos, createReparto, etc. permanecen igual)
+
+// ... (el resto de las funciones no cambian)
 
 export const getRepartos = async (req, res) => {
     try {
