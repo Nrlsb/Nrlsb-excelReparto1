@@ -10,9 +10,7 @@ function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, on
   const [isOptimizing, setIsOptimizing] = useState(false);
 
   const sortedRepartos = useMemo(() => {
-    // --- CORRECCIÓN: Asegurarse de que 'repartos' sea siempre un array ---
     const repartosArray = Array.isArray(repartos) ? repartos : [];
-
     if (showMap) {
         return repartosArray;
     }
@@ -123,20 +121,44 @@ function RepartosTable({ repartos, loading, onClearRepartos, onUpdateReparto, on
     }
   };
 
+  const getCurrentLocation = () => {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error('La geolocalización no es soportada por tu navegador.'));
+      } else {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            resolve({
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+            });
+          },
+          () => {
+            reject(new Error('No se pudo obtener la ubicación. Asegúrate de dar permiso.'));
+          }
+        );
+      }
+    });
+  };
+
   const handleOptimizeRoute = async () => {
-    if (repartos.length < 2) {
-      toast.info('Necesitas al menos 2 repartos para optimizar la ruta.');
+    if (repartos.length < 1) {
+      toast.info('Necesitas al menos 1 reparto para optimizar la ruta.');
       return;
     }
     setIsOptimizing(true);
     try {
-      const { data } = await api.post('/repartos/optimize', { repartos });
+      toast.info('Obteniendo tu ubicación actual...');
+      const currentLocation = await getCurrentLocation();
+      
+      toast.info('Optimizando la ruta desde tu ubicación...');
+      const { data } = await api.post('/repartos/optimize', { repartos, currentLocation });
       onRouteOptimized(data);
       toast.success('Ruta optimizada con éxito.');
       setSortKey(null);
     } catch (error) {
-      const errorMessage = error.response?.data?.details || error.response?.data?.error || 'No se pudo optimizar la ruta.';
-      toast.error(errorMessage);
+      const errorMessage = error.response?.data?.details || error.response?.data?.error || error.message || 'No se pudo optimizar la ruta.';
+      toast.error(errorMessage, { autoClose: 5000 });
       console.error('Error optimizing route:', error);
     } finally {
       setIsOptimizing(false);

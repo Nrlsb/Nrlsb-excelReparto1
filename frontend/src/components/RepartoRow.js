@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 
-// Añadimos orderNumber para mostrar el número de la parada
-function RepartoRow({ reparto, onUpdate, onDelete, isAdmin, orderNumber }) { 
+function RepartoRow({ reparto, onUpdate, onDelete, isAdmin, orderNumber }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedReparto, setEditedReparto] = useState({ ...reparto });
+
+  const isStartLocation = reparto.id === 'start_location';
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -41,11 +42,10 @@ function RepartoRow({ reparto, onUpdate, onDelete, isAdmin, orderNumber }) {
   }
 
   return (
-    <tr className="hover:bg-gray-50 transition-colors duration-200">
+    <tr className={`hover:bg-gray-50 transition-colors duration-200 ${isStartLocation ? 'bg-green-100 font-semibold' : ''}`}>
       <td className="p-4 border-b border-gray-200 text-gray-700 font-medium">
-        {/* Mostramos el número de orden si está disponible */}
         {orderNumber ? (
-            <span className="bg-blue-500 text-white rounded-full h-6 w-6 flex items-center justify-center font-bold text-xs">
+            <span className={`rounded-full h-6 w-6 flex items-center justify-center font-bold text-xs ${isStartLocation ? 'bg-green-500 text-white' : 'bg-blue-500 text-white'}`}>
                 {orderNumber}
             </span>
         ) : (
@@ -59,8 +59,8 @@ function RepartoRow({ reparto, onUpdate, onDelete, isAdmin, orderNumber }) {
       {isAdmin && <td className="p-4 border-b border-gray-200 text-gray-700">{reparto.agregado_por}</td>}
       <td className="p-4 border-b border-gray-200 text-center">
         <div className="flex justify-center gap-2">
-          <button className="px-3 py-1 text-sm font-semibold text-white bg-blue-500 rounded-md hover:bg-blue-600" onClick={() => setIsEditing(true)}>✏️</button>
-          <button className="px-3 py-1 text-sm font-semibold text-white bg-red-500 rounded-md hover:bg-red-600" onClick={() => onDelete(reparto.id)}>🗑️</button>
+          <button disabled={isStartLocation} className="px-3 py-1 text-sm font-semibold text-white bg-blue-500 rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => setIsEditing(true)}>✏️</button>
+          <button disabled={isStartLocation} className="px-3 py-1 text-sm font-semibold text-white bg-red-500 rounded-md hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => onDelete(reparto.id)}>🗑️</button>
         </div>
       </td>
     </tr>

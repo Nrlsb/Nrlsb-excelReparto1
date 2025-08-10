@@ -23,23 +23,20 @@ async function getUserRole(userId) {
 }
 
 export const optimizeRoute = async (req, res) => {
-    const { repartos } = req.body;
+    const { repartos, currentLocation } = req.body;
     const apiKey = process.env.GOOGLE_MAPS_API_KEY;
 
     if (!apiKey) {
         return res.status(500).json({ error: 'La clave de API de Google Maps no está configurada en el servidor.' });
     }
 
-    if (!repartos || repartos.length < 2) {
-        return res.status(400).json({ error: 'Se necesitan al menos 2 repartos para optimizar la ruta.' });
+    if (!repartos || repartos.length === 0) {
+        return res.status(400).json({ error: 'Se necesita al menos 1 reparto para optimizar.' });
     }
 
     try {
-        // 1. Geocodificar todas las direcciones para obtener coordenadas
         const geocodePromises = repartos.map(reparto => {
-            // --- CAMBIO CLAVE: Hacemos la dirección más específica ---
             const fullAddress = `${reparto.direccion}, Esperanza, Santa Fe, Argentina`;
-            // ---------------------------------------------------------
             const params = new URLSearchParams({ address: fullAddress, key: apiKey }).toString();
             const url = `https://maps.googleapis.com/maps/api/geocode/json?${params}`;
             return axios.get(url);
@@ -56,10 +53,19 @@ export const optimizeRoute = async (req, res) => {
             return { ...reparto, location };
         });
 
-        // 2. Obtener la ruta optimizada
-        const origin = `${repartosWithCoords[0].location.lat},${repartosWithCoords[0].location.lng}`;
-        const destination = `${repartosWithCoords[repartosWithCoords.length - 1].location.lat},${repartosWithCoords[repartosWithCoords.length - 1].location.lng}`;
-        const waypoints = repartosWithCoords.slice(1, -1).map(r => `${r.location.lat},${r.location.lng}`);
+        let origin, destination, waypoints, allPointsForOrdering;
+
+        if (currentLocation) {
+            origin = `${currentLocation.lat},${currentLocation.lng}`;
+            destination = origin; // Para una ruta circular
+            waypoints = repartosWithCoords.map(r => `${r.location.lat},${r.location.lng}`);
+            allPointsForOrdering = repartosWithCoords;
+        } else {
+            origin = `${repartosWithCoords[0].location.lat},${repartosWithCoords[0].location.lng}`;
+            destination = `${repartosWithCoords[repartosWithCoords.length - 1].location.lat},${repartosWithCoords[repartosWithCoords.length - 1].location.lng}`;
+            waypoints = repartosWithCoords.slice(1, -1).map(r => `${r.location.lat},${r.location.lng}`);
+            allPointsForOrdering = repartosWithCoords.slice(1, -1);
+        }
 
         const directionParams = new URLSearchParams({
             origin: origin,
@@ -80,13 +86,30 @@ export const optimizeRoute = async (req, res) => {
         const optimizedOrder = route.waypoint_order;
         const polyline = route.overview_polyline.points;
 
-        // 3. Reconstruir el array de repartos en el orden optimizado
-        const originalWaypoints = repartosWithCoords.slice(1, -1);
-        const optimizedRepartos = [
-            repartosWithCoords[0],
-            ...optimizedOrder.map(index => originalWaypoints[index]),
-            repartosWithCoords[repartosWithCoords.length - 1]
-        ];
+        let optimizedRepartos;
+
+        if (currentLocation) {
+            const startPoint = {
+                id: 'start_location',
+                destino: 'Punto de Partida',
+                direccion: 'Tu ubicación actual',
+                location: currentLocation,
+                bultos: '-',
+                horarios: '-',
+                agregado_por: '-',
+                created_at: new Date().toISOString()
+            };
+            optimizedRepartos = [
+                startPoint,
+                ...optimizedOrder.map(index => allPointsForOrdering[index]),
+            ];
+        } else {
+            optimizedRepartos = [
+                repartosWithCoords[0],
+                ...optimizedOrder.map(index => allPointsForOrdering[index]),
+                repartosWithCoords[repartosWithCoords.length - 1]
+            ];
+        }
 
         res.status(200).json({ optimizedRepartos, polyline });
 
@@ -96,9 +119,7 @@ export const optimizeRoute = async (req, res) => {
     }
 };
 
-
-// ... (el resto de las funciones no cambian)
-
+// ... (resto de las funciones sin cambios)
 export const getRepartos = async (req, res) => {
     try {
         const userId = req.user.id;
