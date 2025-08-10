@@ -1,25 +1,36 @@
 import supabase from '../config/supabaseClient.js';
 
-const authMiddleware = async (req, res, next) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).json({ error: 'No autorizado: Token no proporcionado.' });
+/**
+ * Middleware para proteger rutas.
+ * Verifica el token JWT de la cabecera 'Authorization'.
+ * Si el token es válido, adjunta la información del usuario a `req.user`.
+ */
+export const authMiddleware = async (req, res, next) => {
+  // Obtener el token de la cabecera
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Acceso no autorizado: No se proporcionó token.' });
+  }
+
+  const token = authHeader.split(' ')[1];
+
+  try {
+    // Verificar el token con Supabase
+    const { data, error } = await supabase.auth.getUser(token);
+
+    if (error || !data.user) {
+      console.error('Error de autenticación de Supabase:', error?.message);
+      return res.status(401).json({ error: 'Acceso no autorizado: Token inválido o expirado.' });
     }
 
-    const token = authHeader.split(' ')[1];
+    // Si el token es válido, adjuntar el usuario al objeto de la solicitud
+    req.user = data.user;
 
-    try {
-        const { data: { user }, error } = await supabase.auth.getUser(token);
-
-        if (error || !user) {
-            return res.status(401).json({ error: 'No autorizado: Token inválido.' });
-        }
-
-        req.user = user;
-        next();
-    } catch (error) {
-        return res.status(401).json({ error: 'No autorizado: Error de autenticación.' });
-    }
+    // Continuar con la siguiente función en la ruta
+    next();
+  } catch (error) {
+    console.error('Error inesperado en el middleware de autenticación:', error);
+    res.status(500).json({ error: 'Error interno del servidor.' });
+  }
 };
-
-export default authMiddleware;
