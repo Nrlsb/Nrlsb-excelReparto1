@@ -1,5 +1,5 @@
 // frontend/src/App.js
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import api from './services/api';
 import { ToastContainer, toast } from 'react-toastify';
@@ -32,52 +32,7 @@ function App() {
     onConfirm: () => {},
   });
 
-  useEffect(() => {
-    const setupSession = async (session) => {
-      setSession(session);
-      if (session) {
-        api.defaults.headers.common['Authorization'] = `Bearer ${session.access_token}`;
-        
-        try {
-          const { data: profile, error } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
-          if (error && error.code !== 'PGRST116') throw error;
-          if (profile) setUserRole(profile.role);
-          else setTimeout(() => setupSession(session), 1500);
-        } catch (e) {
-            console.error("Error al obtener el perfil:", e);
-            setUserRole('user');
-        }
-        
-        fetchRepartos();
-      } else {
-        delete api.defaults.headers.common['Authorization'];
-        setRepartos([]);
-        setUserRole('user');
-        setLoading(false);
-        setOptimizedData(null);
-        setActiveTab('carga');
-      }
-    };
-
-    supabase.auth.getSession().then(({ data: { session } }) => setupSession(session));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setupSession(session));
-    return () => subscription.unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (!session) return;
-    const channel = supabase
-      .channel('repartos_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'repartos' }, () => {
-        fetchRepartos();
-        setOptimizedData(null);
-        setActiveTab('carga');
-      })
-      .subscribe();
-    return () => supabase.removeChannel(channel);
-  }, [session]);
-
-  const fetchRepartos = async () => {
+  const fetchRepartos = useCallback(async () => {
     setLoading(true);
     try {
       const { data } = await api.get('/repartos');
@@ -92,8 +47,71 @@ function App() {
     } finally {
       setLoading(false);
     }
-  };
-  
+  }, []);
+
+  useEffect(() => {
+    const setupSession = async (currentSession) => {
+      setSession(currentSession);
+      if (currentSession) {
+        api.defaults.headers.common['Authorization'] = `Bearer ${currentSession.access_token}`;
+        
+        try {
+          const { data: profile, error } = await supabase.from('profiles').select('role').eq('id', currentSession.user.id).single();
+
+          if (error && error.code !== 'PGRST116') { // PGRST116 means no rows found
+            throw error;
+          }
+          
+          if (profile) {
+            setUserRole(profile.role);
+            fetchRepartos();
+          } else {
+            // Perfil no encontrado, podría estar creándose. Reintentamos una vez.
+            setTimeout(async () => {
+              const { data: retryProfile, error: retryError } = await supabase.from('profiles').select('role').eq('id', currentSession.user.id).single();
+              if (retryProfile) {
+                setUserRole(retryProfile.role);
+              } else {
+                 console.error("No se pudo encontrar el perfil del usuario tras reintentar.");
+                 setUserRole('user'); // Asignar rol por defecto si no se encuentra
+              }
+              fetchRepartos();
+            }, 1500);
+          }
+        } catch (e) {
+            console.error("Error al obtener el perfil:", e);
+            setUserRole('user');
+            fetchRepartos(); // Intentamos cargar los repartos de todas formas
+        }
+        
+      } else {
+        delete api.defaults.headers.common['Authorization'];
+        setRepartos([]);
+        setUserRole('user');
+        setLoading(false);
+        setOptimizedData(null);
+        setActiveTab('carga');
+      }
+    };
+
+    supabase.auth.getSession().then(({ data: { session } }) => setupSession(session));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setupSession(session));
+    return () => subscription.unsubscribe();
+  }, [fetchRepartos]);
+
+  useEffect(() => {
+    if (!session) return;
+    const channel = supabase
+      .channel('repartos_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'repartos' }, () => {
+        fetchRepartos();
+        setOptimizedData(null);
+        setActiveTab('carga');
+      })
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [session, fetchRepartos]);
+
   const handleAddReparto = async (newReparto) => {
     try {
       await api.post('/repartos', { ...newReparto, user_id: session.user.id });
@@ -181,7 +199,6 @@ function App() {
     const dataToExport = repartos.map(r => ({
       'ID': r.id, 'Destino': r.destino, 'Dirección': r.direccion,
       'Horarios': r.horarios, 'Bultos': r.bultos,
-      // --- CORRECCIÓN: Usar hasElevatedPermissions en lugar de isAdmin ---
       ...(hasElevatedPermissions && {'Agregado por': r.agregado_por})
     }));
     const ws = XLSX.utils.json_to_sheet(dataToExport);
