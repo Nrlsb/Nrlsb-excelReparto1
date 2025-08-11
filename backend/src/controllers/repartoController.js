@@ -84,7 +84,9 @@ export const optimizeRoute = async (req, res) => {
 
         const route = directionsData.routes[0];
         const optimizedOrder = route.waypoint_order;
-        const polyline = route.overview_polyline.points;
+        
+        // Extraemos las polilíneas de cada tramo (leg) de la ruta
+        const legPolylines = route.legs.map(leg => leg.overview_polyline.points);
 
         let optimizedRepartos;
 
@@ -111,7 +113,7 @@ export const optimizeRoute = async (req, res) => {
             ];
         }
 
-        res.status(200).json({ optimizedRepartos, polyline });
+        res.status(200).json({ optimizedRepartos, polylines: legPolylines });
 
     } catch (err) {
         console.error('Error en la optimización de ruta con Google Maps:', err.message);

@@ -75,7 +75,6 @@ function App() {
           }
           setUserRole(role);
 
-          // Si el usuario no es admin y está en la pestaña de ruta, lo movemos a la de carga.
           if (role !== 'admin' && role !== 'especial') {
             setActiveTab('carga');
           }
@@ -201,7 +200,7 @@ function App() {
       toast.info('Optimizando la ruta...');
       const { data } = await api.post('/repartos/optimize', { repartos, currentLocation });
       
-      setOptimizedData({ repartos: data.optimizedRepartos, polyline: data.polyline });
+      setOptimizedData({ repartos: data.optimizedRepartos, polylines: data.polylines });
       setActiveTab('ruta');
       toast.success('Ruta optimizada con éxito.');
     } catch (error) {
@@ -313,7 +312,7 @@ function App() {
                 </>
               )}
               {activeTab === 'ruta' && optimizedData && hasElevatedPermissions && (
-                <Ruta repartos={optimizedData.repartos} polyline={optimizedData.polyline} onUpdateReparto={handleUpdateReparto} onDeleteReparto={handleDeleteReparto} isAdmin={hasElevatedPermissions} />
+                <Ruta repartos={optimizedData.repartos} polylines={optimizedData.polylines} onUpdateReparto={handleUpdateReparto} onDeleteReparto={handleDeleteReparto} isAdmin={hasElevatedPermissions} />
               )}
             </div>
           </div>

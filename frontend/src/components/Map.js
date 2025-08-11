@@ -14,12 +14,12 @@ function BoundsFitter({ bounds }) {
   return null;
 }
 
-function Map({ repartos, polyline }) {
-  const routePath = useMemo(() => {
-    if (!polyline) return [];
-    // Decodificamos la polilínea que nos da la API de Google
-    return polylineUtil.decode(polyline);
-  }, [polyline]);
+function Map({ repartos, polylines }) { // Cambiamos polyline por polylines
+  const routeSegments = useMemo(() => {
+    if (!polylines || !Array.isArray(polylines)) return [];
+    // Decodificamos cada polilínea del array
+    return polylines.map(p => polylineUtil.decode(p));
+  }, [polylines]);
 
   const repartosConCoordenadas = useMemo(() => 
     (repartos || []).filter(r => r.location && typeof r.location.lat === 'number' && typeof r.location.lng === 'number'),
@@ -30,6 +30,9 @@ function Map({ repartos, polyline }) {
     if (repartosConCoordenadas.length === 0) return null;
     return repartosConCoordenadas.map(r => [r.location.lat, r.location.lng]);
   }, [repartosConCoordenadas]);
+
+  // Paleta de colores para los tramos de la ruta
+  const colors = ['#3388ff', '#ff3333', '#33ff33', '#ff33ff', '#33ffff', '#ffff33'];
 
   if (repartosConCoordenadas.length === 0) {
     return (
@@ -54,8 +57,14 @@ function Map({ repartos, polyline }) {
           </Marker>
         ))}
         
-        {/* Dibujamos la ruta completa siguiendo las calles */}
-        {routePath.length > 0 && <Polyline pathOptions={{ color: 'blue', weight: 5, opacity: 0.7 }} positions={routePath} />}
+        {/* Dibujamos cada tramo de la ruta con un color diferente */}
+        {routeSegments.map((segment, index) => (
+          <Polyline 
+            key={index}
+            pathOptions={{ color: colors[index % colors.length], weight: 5, opacity: 0.7 }} 
+            positions={segment} 
+          />
+        ))}
         
         <BoundsFitter bounds={bounds} />
       </MapContainer>
