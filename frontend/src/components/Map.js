@@ -1,82 +1,75 @@
-import React from 'react';
-import { GoogleMap, Marker, DirectionsRenderer } from '@react-google-maps/api';
+// src/components/Map.js
+import React, { useEffect, useMemo } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
+import polylineUtil from 'polyline-encoded';
 
-const mapContainerStyle = {
-    width: '100%',
-    height: '100%',
-    borderRadius: '0.5rem',
-};
-
-// Un centro por defecto para el mapa, por si no hay otra ubicación
-const defaultCenter = {
-    lat: -34.6037, // Buenos Aires, Argentina
-    lng: -58.3816,
-};
-
-const Map = ({ repartos, userLocation, directionsResponse, isLoaded, ruta }) => {
-    // El mapa se centrará en la ubicación del usuario o en el primer reparto
-    const center = userLocation || (repartos && repartos.length > 0 ? { lat: repartos[0].lat, lng: repartos[0].lng } : defaultCenter);
-
-    if (!isLoaded) {
-        return <div>Cargando mapa...</div>;
+// Componente para ajustar los límites del mapa
+function BoundsFitter({ bounds }) {
+  const map = useMap();
+  useEffect(() => {
+    if (bounds && bounds.length > 0) {
+      map.fitBounds(bounds);
     }
+  }, [bounds, map]);
+  return null;
+}
 
+function Map({ repartos, polylines }) { // Cambiamos polyline por polylines
+  const routeSegments = useMemo(() => {
+    if (!polylines || !Array.isArray(polylines)) return [];
+    // Decodificamos cada polilínea del array
+    return polylines.map(p => polylineUtil.decode(p));
+  }, [polylines]);
+
+  const repartosConCoordenadas = useMemo(() => 
+    (repartos || []).filter(r => r.location && typeof r.location.lat === 'number' && typeof r.location.lng === 'number'),
+    [repartos]
+  );
+
+  const bounds = useMemo(() => {
+    if (repartosConCoordenadas.length === 0) return null;
+    return repartosConCoordenadas.map(r => [r.location.lat, r.location.lng]);
+  }, [repartosConCoordenadas]);
+
+  // Paleta de colores para los tramos de la ruta
+  const colors = ['#3388ff', '#ff3333', '#33ff33', '#ff33ff', '#33ffff', '#ffff33'];
+
+  if (repartosConCoordenadas.length === 0) {
     return (
-        <GoogleMap
-            mapContainerStyle={mapContainerStyle}
-            zoom={12}
-            center={center}
-            options={{
-                streetViewControl: false,
-                mapTypeControl: false,
-                fullscreenControl: false,
-            }}
-        >
-            {/* Marcador para la ubicación del usuario */}
-            {userLocation && (
-                <Marker
-                    position={userLocation}
-                    label={{ text: "P", color: "white" }}
-                    title="Punto de Partida"
-                    icon={{
-                        path: window.google.maps.SymbolPath.CIRCLE,
-                        scale: 10,
-                        fillColor: "#4285F4",
-                        fillOpacity: 1,
-                        strokeWeight: 2,
-                        strokeColor: "white",
-                    }}
-                />
-            )}
-
-            {/* Marcadores para los repartos */}
-            {repartos && repartos.map((reparto, index) => (
-                reparto.lat && reparto.lng && (
-                    <Marker
-                        key={reparto.id}
-                        position={{ lat: reparto.lat, lng: reparto.lng }}
-                        label={`${index + 1}`}
-                        title={`${reparto.cliente}\n${reparto.direccion}`}
-                    />
-                )
-            ))}
-
-            {/* Renderizador para la ruta optimizada */}
-            {directionsResponse && ruta && (
-                <DirectionsRenderer
-                    directions={directionsResponse}
-                    options={{
-                        suppressMarkers: true, // Ocultamos los marcadores A y B por defecto
-                        polylineOptions: {
-                            strokeColor: '#FF0000', // Hacemos la ruta de un color rojo visible
-                            strokeOpacity: 0.8,
-                            strokeWeight: 5,
-                        },
-                    }}
-                />
-            )}
-        </GoogleMap>
+      <div className="bg-gray-100 p-6 rounded-xl mb-8 shadow-sm border border-gray-200 text-center text-gray-500">
+        Optimiza la ruta para ver el mapa. Los repartos deben tener coordenadas válidas.
+      </div>
     );
-};
+  }
+
+  return (
+    <div className="mb-8">
+      <MapContainer center={[repartosConCoordenadas[0].location.lat, repartosConCoordenadas[0].location.lng]} zoom={13} scrollWheelZoom={false}>
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+        {repartosConCoordenadas.map((reparto, index) => (
+          <Marker key={reparto.id || index} position={[reparto.location.lat, reparto.location.lng]}>
+            <Popup>
+              <b>{index + 1}. {reparto.destino}</b><br />{reparto.direccion}
+            </Popup>
+          </Marker>
+        ))}
+        
+        {/* Dibujamos cada tramo de la ruta con un color diferente */}
+        {routeSegments.map((segment, index) => (
+          <Polyline 
+            key={index}
+            pathOptions={{ color: colors[index % colors.length], weight: 5, opacity: 0.7 }} 
+            positions={segment} 
+          />
+        ))}
+        
+        <BoundsFitter bounds={bounds} />
+      </MapContainer>
+    </div>
+  );
+}
 
 export default Map;
