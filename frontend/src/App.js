@@ -32,9 +32,9 @@ function App() {
     onConfirm: () => {},
   });
 
+  const hasElevatedPermissions = userRole === 'admin' || userRole === 'especial';
+
   const fetchRepartos = useCallback(async () => {
-    // No establecemos loading a true aquí para evitar parpadeos innecesarios.
-    // Se gestionará en el useEffect principal.
     try {
       const { data } = await api.get('/repartos');
       if (Array.isArray(data)) {
@@ -47,7 +47,7 @@ function App() {
       toast.error("Error al cargar los repartos.");
       setRepartos([]);
     } finally {
-      setLoading(false); // Aseguramos que loading se ponga en false al finalizar.
+      setLoading(false);
     }
   }, []);
 
@@ -55,7 +55,7 @@ function App() {
     const setupSessionAndFetchData = async (currentSession) => {
       setSession(currentSession);
       if (currentSession) {
-        setLoading(true); // Ponemos loading a true al iniciar la carga de datos.
+        setLoading(true);
         api.defaults.headers.common['Authorization'] = `Bearer ${currentSession.access_token}`;
         
         try {
@@ -69,30 +69,32 @@ function App() {
             throw error;
           }
           
+          let role = 'user';
           if (profile) {
-            setUserRole(profile.role);
-          } else {
-            // Si no hay perfil, asumimos el rol por defecto.
-            // El trigger de Supabase debería crearlo.
-            setUserRole('user');
+            role = profile.role;
+          }
+          setUserRole(role);
+
+          // Si el usuario no es admin y está en la pestaña de ruta, lo movemos a la de carga.
+          if (role !== 'admin' && role !== 'especial') {
+            setActiveTab('carga');
           }
           
-          // Ahora que tenemos el rol (o el por defecto), cargamos los repartos.
           await fetchRepartos();
 
         } catch (e) {
             console.error("Error al obtener el perfil:", e);
             setUserRole('user');
-            await fetchRepartos(); // Intentamos cargar repartos aunque falle el perfil.
+            setActiveTab('carga');
+            await fetchRepartos();
         }
       } else {
-        // Limpiamos todo si no hay sesión.
         delete api.defaults.headers.common['Authorization'];
         setRepartos([]);
         setUserRole('user');
         setOptimizedData(null);
         setActiveTab('carga');
-        setLoading(false); // Importante: dejar de cargar si no hay sesión.
+        setLoading(false);
       }
     };
 
@@ -116,11 +118,13 @@ function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'repartos' }, () => {
         fetchRepartos();
         setOptimizedData(null);
-        setActiveTab('carga');
+        if (!hasElevatedPermissions) {
+          setActiveTab('carga');
+        }
       })
       .subscribe();
     return () => supabase.removeChannel(channel);
-  }, [session, fetchRepartos]);
+  }, [session, fetchRepartos, hasElevatedPermissions]);
 
   const handleAddReparto = async (newReparto) => {
     try {
@@ -159,8 +163,6 @@ function App() {
     });
   };
   
-  const hasElevatedPermissions = userRole === 'admin' || userRole === 'especial';
-
   const handleClearRepartos = () => {
     const message = hasElevatedPermissions ? '¿Estás seguro de que quieres eliminar TODOS los repartos?' : '¿Estás seguro de que quieres eliminar TODOS TUS repartos?';
     setConfirmState({
@@ -187,7 +189,6 @@ function App() {
     setIsOptimizing(true);
     try {
       toast.info('Obteniendo tu ubicación actual...');
-      // Solicitamos alta precisión para la geolocalización
       const position = await new Promise((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, {
           enableHighAccuracy: true,
@@ -286,16 +287,18 @@ function App() {
             <Header session={session} onOpenAccountModal={() => setShowAccountModal(true)} />
             <div className="flex border-b border-gray-300">
               <TabButton tabName="carga" label="Carga de Repartos" />
-              <TabButton tabName="ruta" label="Visualización de Ruta" />
+              {hasElevatedPermissions && <TabButton tabName="ruta" label="Visualización de Ruta" />}
             </div>
             <div className="pt-6">
               {activeTab === 'carga' && (
                 <>
                   <RepartoForm onAddReparto={handleAddReparto} session={session} />
                   <div className="flex flex-wrap gap-4 mb-5">
-                    <button onClick={handleOptimizeRoute} disabled={isOptimizing || loading} className="px-5 py-2 border-none rounded-lg text-sm font-semibold cursor-pointer transition-transform duration-200 uppercase tracking-wider text-white bg-gradient-to-r from-cyan-500 to-blue-500 hover:scale-105 disabled:opacity-60">
-                      {isOptimizing ? 'Optimizando...' : '🗺️ Optimizar Ruta'}
-                    </button>
+                    {hasElevatedPermissions && (
+                      <button onClick={handleOptimizeRoute} disabled={isOptimizing || loading} className="px-5 py-2 border-none rounded-lg text-sm font-semibold cursor-pointer transition-transform duration-200 uppercase tracking-wider text-white bg-gradient-to-r from-cyan-500 to-blue-500 hover:scale-105 disabled:opacity-60">
+                        {isOptimizing ? 'Optimizando...' : '🗺️ Optimizar Ruta'}
+                      </button>
+                    )}
                     <button onClick={handleSimpleExportExcel} className="px-5 py-2 border-none rounded-lg text-sm font-semibold cursor-pointer transition-transform duration-200 uppercase tracking-wider text-white bg-gradient-to-r from-green-500 to-teal-500 hover:scale-105">
                       📊 Exportar a Excel
                     </button>
@@ -309,7 +312,7 @@ function App() {
                   <RepartosTable repartos={repartos} loading={loading} onUpdateReparto={handleUpdateReparto} onDeleteReparto={handleDeleteReparto} isAdmin={hasElevatedPermissions} />
                 </>
               )}
-              {activeTab === 'ruta' && optimizedData && (
+              {activeTab === 'ruta' && optimizedData && hasElevatedPermissions && (
                 <Ruta repartos={optimizedData.repartos} polyline={optimizedData.polyline} onUpdateReparto={handleUpdateReparto} onDeleteReparto={handleDeleteReparto} isAdmin={hasElevatedPermissions} />
               )}
             </div>
