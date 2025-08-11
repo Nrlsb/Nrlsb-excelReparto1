@@ -12,16 +12,13 @@ Una aplicación web full-stack moderna para la gestión de repartos de forma col
 
 -   **Autenticación y Perfiles de Usuario**: Sistema completo de registro e inicio de sesión. Cada usuario tiene un alias personalizable.
 -   **Sistema de Roles**:
-    -   **Admin/Especial**: Pueden ver, editar y eliminar los repartos de **todos** los usuarios.
-    -   **User**: Rol estándar que solo puede gestionar sus propios repartos.
--   **CRUD Completo y Privado**: Los usuarios estándar solo pueden crear, leer, actualizar y eliminar sus propios repartos, garantizando la privacidad de los datos.
+    -   **Admin/Especial**: Pueden ver, editar y eliminar los repartos de **todos** los usuarios. Tienen acceso exclusivo a la optimización y visualización de rutas en el mapa.
+    -   **User**: Rol estándar que solo puede crear, leer, actualizar y eliminar sus propios repartos.
+-   **CRUD Completo y Privado**: Los usuarios estándar solo pueden gestionar sus propios repartos, garantizando la privacidad de los datos.
+-   **Optimización y Visualización de Rutas (Solo Admin/Especial)**: Los administradores pueden calcular la ruta más eficiente para los repartos del día, partiendo desde su ubicación actual. La ruta optimizada se muestra en un mapa interactivo (Leaflet) con el orden de las paradas.
 -   **Sincronización en Tiempo Real**: Los cambios se reflejan instantáneamente en todas las pantallas de los usuarios gracias a las suscripciones en tiempo real de Supabase.
--   **Interfaz Moderna y Responsiva**: Desarrollada con **React** y estilizada con **Tailwind CSS** para una experiencia de usuario limpia y adaptable.
--   **Ordenamiento de Datos**: La tabla de repartos se puede ordenar dinámicamente haciendo clic en las cabeceras de las columnas.
+-   **Interfaz Moderna y Responsiva**: Desarrollada con **React** y estilizada con **Tailwind CSS**. La navegación por pestañas separa la carga de datos de la visualización de la ruta.
 -   **Exportación a Excel**: Descarga la lista de repartos (respetando los permisos de rol) en un archivo `.xlsx`, ya sea en un formato simple o utilizando una plantilla corporativa desde el backend.
--   **Backend Robusto y Seguro**: API RESTful construida con **Node.js** y **Express** que protege las rutas y valida los permisos de los usuarios basándose en su rol.
--   **Arquitectura Desacoplada**: Frontend y Backend separados para mejorar la escalabilidad y el mantenimiento.
--   **Despliegue Profesional**: Alojado en **Vercel** para el frontend y **Render** para el backend.
 
 ---
 
