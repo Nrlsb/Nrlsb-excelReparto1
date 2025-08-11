@@ -78,15 +78,20 @@ export const optimizeRoute = async (req, res) => {
         const directionsResponse = await axios.get(directionsUrl);
         const directionsData = directionsResponse.data;
 
-        if (directionsData.status !== 'OK') {
+        if (directionsData.status !== 'OK' || !directionsData.routes || directionsData.routes.length === 0) {
             throw new Error(`Error de la API de Google Directions: ${directionsData.status} - ${directionsData.error_message || 'Sin detalles adicionales.'}`);
         }
 
         const route = directionsData.routes[0];
         const optimizedOrder = route.waypoint_order;
         
-        // Extraemos las polilíneas de cada tramo (leg) de la ruta
-        const legPolylines = route.legs.map(leg => leg.overview_polyline.points);
+        // Corregimos la extracción de las polilíneas de cada tramo (leg)
+        const legPolylines = route.legs.map(leg => {
+            if (leg && leg.overview_polyline && leg.overview_polyline.points) {
+                return leg.overview_polyline.points;
+            }
+            return ''; // Devolvemos un string vacío si no se encuentra la polilínea
+        }).filter(Boolean); // Filtramos para eliminar los tramos vacíos
 
         let optimizedRepartos;
 
