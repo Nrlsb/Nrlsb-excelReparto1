@@ -1,7 +1,7 @@
 // src/components/Map.js
 import React, { useEffect, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
-import polylineUtil from 'polyline-encoded'; // <-- Importamos la nueva biblioteca
+import polylineUtil from 'polyline-encoded';
 
 // Componente para ajustar los límites del mapa
 function BoundsFitter({ bounds }) {
@@ -15,29 +15,11 @@ function BoundsFitter({ bounds }) {
 }
 
 function Map({ repartos, polyline }) {
-  const { routePath, returnPath } = useMemo(() => {
-    if (!polyline) return { routePath: [], returnPath: [] };
-    
-    const decoded = polylineUtil.decode(polyline);
-    
-    // Si la ruta es circular, la dividimos en dos para diferenciar ida y vuelta
-    if (repartos.length > 0 && repartos[0].id === 'start_location') {
-      const waypointsCount = repartos.length;
-      // Aproximadamente la mitad de los puntos para la ida
-      const halfwayIndex = Math.floor(decoded.length / 2);
-      
-      const route = decoded.slice(0, halfwayIndex + 1);
-      const returnRoute = decoded.slice(halfwayIndex);
-
-      // Aplicamos un pequeño desplazamiento a la ruta de vuelta para que sea visible
-      const offsetReturnRoute = returnRoute.map(([lat, lng]) => [lat + 0.00005, lng + 0.00005]);
-
-      return { routePath: route, returnPath: offsetReturnRoute };
-    }
-
-    // Si no es circular, mostramos una sola línea
-    return { routePath: decoded, returnPath: [] };
-  }, [polyline, repartos]);
+  const routePath = useMemo(() => {
+    if (!polyline) return [];
+    // Decodificamos la polilínea que nos da la API de Google
+    return polylineUtil.decode(polyline);
+  }, [polyline]);
 
   const repartosConCoordenadas = useMemo(() => 
     (repartos || []).filter(r => r.location && typeof r.location.lat === 'number' && typeof r.location.lng === 'number'),
@@ -72,12 +54,9 @@ function Map({ repartos, polyline }) {
           </Marker>
         ))}
         
-        {/* Dibujamos la ruta de ida */}
+        {/* Dibujamos la ruta completa siguiendo las calles */}
         {routePath.length > 0 && <Polyline pathOptions={{ color: 'blue', weight: 5, opacity: 0.7 }} positions={routePath} />}
         
-        {/* Dibujamos la ruta de vuelta con otro color y estilo */}
-        {returnPath.length > 0 && <Polyline pathOptions={{ color: 'red', weight: 3, opacity: 0.7, dashArray: '5, 10' }} positions={returnPath} />}
-
         <BoundsFitter bounds={bounds} />
       </MapContainer>
     </div>
