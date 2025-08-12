@@ -7,8 +7,6 @@ import customParseFormat from 'dayjs/plugin/customParseFormat';
 
 dayjs.extend(customParseFormat);
 
-// --- NUEVO: Lógica mejorada para calcular ETA y conflictos ---
-
 // Parsea una duración en texto (ej. "15 mins") a segundos
 const parseDurationToSeconds = (durationText) => {
   if (!durationText) return 0;
@@ -40,7 +38,6 @@ function RepartosTable({ repartos, loading, onUpdateReparto, onDeleteReparto, is
   const [sortKey, setSortKey] = useState('id');
   const [sortOrder, setSortOrder] = useState('asc');
 
-  // --- LÓGICA DE CÁLCULO DE ETA Y CONFLICTOS ---
   const routeAnalysis = useMemo(() => {
     if (!isOptimizedView || !repartos || repartos.length === 0) {
       return { etas: {}, conflicts: {} };
@@ -59,7 +56,6 @@ function RepartosTable({ repartos, loading, onUpdateReparto, onDeleteReparto, is
       const prevReparto = repartos[index - 1];
       const legDurationSeconds = parseDurationToSeconds(prevReparto.legData?.duration);
       
-      // Añadimos un tiempo de parada estimado (ej. 10 minutos por entrega)
       const stopDurationSeconds = 10 * 60; 
       cumulativeTime = cumulativeTime.add(legDurationSeconds + stopDurationSeconds, 'second');
       
@@ -70,7 +66,6 @@ function RepartosTable({ repartos, loading, onUpdateReparto, onDeleteReparto, is
         const { startTime, endTime } = timeWindow;
         if (cumulativeTime.isBefore(startTime)) {
           conflicts[reparto.id] = { hasConflict: true, message: `Llegada temprana (antes de las ${startTime.format('HH:mm')})` };
-          // Ajustamos el tiempo de espera
           cumulativeTime = startTime;
         } else if (cumulativeTime.isAfter(endTime)) {
           conflicts[reparto.id] = { hasConflict: true, message: `Llegada tardía (después de las ${endTime.format('HH:mm')})` };
@@ -130,9 +125,10 @@ function RepartosTable({ repartos, loading, onUpdateReparto, onDeleteReparto, is
     : (isOptimizedView ? 7 : 6);
 
   return (
-    <div className="bg-white rounded-xl shadow-md overflow-hidden">
-      <table className="w-full border-collapse">
-        <thead>
+    <div className="bg-white rounded-xl shadow-md overflow-x-auto">
+      <table className="w-full border-collapse min-w-[640px]">
+        {/* --- MODIFICADO: Ocultamos la cabecera en móviles --- */}
+        <thead className="hidden sm:table-header-group">
           <tr>
             <SortableHeader columnKey="id">{isOptimizedView ? 'Orden' : 'ID'}</SortableHeader>
             <SortableHeader columnKey="destino">Destino</SortableHeader>
@@ -158,6 +154,7 @@ function RepartosTable({ repartos, loading, onUpdateReparto, onDeleteReparto, is
                 orderNumber={isOptimizedView ? index + 1 : null}
                 eta={routeAnalysis.etas[reparto.id]}
                 conflictInfo={routeAnalysis.conflicts[reparto.id]}
+                isOptimizedView={isOptimizedView}
               />
             ))
           ) : (
