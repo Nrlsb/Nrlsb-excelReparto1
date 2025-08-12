@@ -4,6 +4,7 @@ import ExcelJS from 'exceljs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import axios from 'axios';
+import polylineUtil from 'polyline-encoded';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -35,6 +36,29 @@ export const optimizeRoute = async (req, res) => {
     }
 
     try {
+        let startLocationCoords;
+        let startLocationAddress = 'Tu ubicación actual';
+
+        // --- LÓGICA PARA MANEJAR DIRECCIÓN MANUAL O GEOLOCALIZACIÓN ---
+        if (typeof currentLocation === 'string') {
+            // Si es un string, es una dirección manual que necesita ser geocodificada
+            startLocationAddress = currentLocation;
+            const geocodeParams = new URLSearchParams({ address: startLocationAddress, key: apiKey }).toString();
+            const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?${geocodeParams}`;
+            const geocodeResponse = await axios.get(geocodeUrl);
+            
+            if (geocodeResponse.data.status !== 'OK' || !geocodeResponse.data.results[0]) {
+                throw new Error(`No se pudo geocodificar la dirección de partida: "${startLocationAddress}". Razón: ${geocodeResponse.data.status}`);
+            }
+            startLocationCoords = geocodeResponse.data.results[0].geometry.location;
+
+        } else if (currentLocation && typeof currentLocation.lat === 'number' && typeof currentLocation.lng === 'number') {
+            // Si es un objeto con lat/lng, es de la geolocalización del navegador
+            startLocationCoords = currentLocation;
+        } else {
+            return res.status(400).json({ error: 'No se proporcionó un punto de partida válido.' });
+        }
+
         const geocodePromises = repartos.map(reparto => {
             const fullAddress = `${reparto.direccion}, Esperanza, Santa Fe, Argentina`;
             const params = new URLSearchParams({ address: fullAddress, key: apiKey }).toString();
@@ -53,20 +77,10 @@ export const optimizeRoute = async (req, res) => {
             return { ...reparto, location };
         });
 
-        let origin, destination, waypoints, allPointsForOrdering;
-
-        if (currentLocation) {
-            origin = `${currentLocation.lat},${currentLocation.lng}`;
-            destination = origin; // Para una ruta circular
-            waypoints = repartosWithCoords.map(r => `${r.location.lat},${r.location.lng}`);
-            allPointsForOrdering = repartosWithCoords;
-        } else {
-            origin = `${repartosWithCoords[0].location.lat},${repartosWithCoords[0].location.lng}`;
-            destination = `${repartosWithCoords[repartosWithCoords.length - 1].location.lat},${repartosWithCoords[repartosWithCoords.length - 1].location.lng}`;
-            waypoints = repartosWithCoords.slice(1, -1).map(r => `${r.location.lat},${r.location.lng}`);
-            allPointsForOrdering = repartosWithCoords.slice(1, -1);
-        }
-
+        const origin = `${startLocationCoords.lat},${startLocationCoords.lng}`;
+        const destination = origin; // Ruta circular
+        const waypoints = repartosWithCoords.map(r => `${r.location.lat},${r.location.lng}`);
+        
         const directionParams = new URLSearchParams({
             origin: origin,
             destination: destination,
@@ -85,36 +99,24 @@ export const optimizeRoute = async (req, res) => {
         const route = directionsData.routes[0];
         const optimizedOrder = route.waypoint_order;
         
-        // --- CORRECCIÓN ---
-        // Extraemos la polilínea general de la ruta completa.
         const overview_polyline = route.overview_polyline.points;
 
-        let optimizedRepartos;
+        const startPoint = {
+            id: 'start_location',
+            destino: 'Punto de Partida',
+            direccion: startLocationAddress,
+            location: startLocationCoords,
+            bultos: '-',
+            horarios: '-',
+            agregado_por: '-',
+            created_at: new Date().toISOString()
+        };
+        
+        const optimizedRepartos = [
+            startPoint,
+            ...optimizedOrder.map(index => repartosWithCoords[index]),
+        ];
 
-        if (currentLocation) {
-            const startPoint = {
-                id: 'start_location',
-                destino: 'Punto de Partida',
-                direccion: 'Tu ubicación actual',
-                location: currentLocation,
-                bultos: '-',
-                horarios: '-',
-                agregado_por: '-',
-                created_at: new Date().toISOString()
-            };
-            optimizedRepartos = [
-                startPoint,
-                ...optimizedOrder.map(index => allPointsForOrdering[index]),
-            ];
-        } else {
-            optimizedRepartos = [
-                repartosWithCoords[0],
-                ...optimizedOrder.map(index => allPointsForOrdering[index]),
-                repartosWithCoords[repartosWithCoords.length - 1]
-            ];
-        }
-
-        // Enviamos la polilínea única en la respuesta
         res.status(200).json({ optimizedRepartos, polyline: overview_polyline });
 
     } catch (err) {

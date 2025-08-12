@@ -13,6 +13,7 @@ import RepartoForm from './components/RepartoForm';
 import RepartosTable from './components/RepartosTable';
 import ConfirmModal from './components/ConfirmModal';
 import Ruta from './components/Ruta';
+import LocationModal from './components/LocationModal'; // Importar el nuevo modal
 
 function App() {
   const [session, setSession] = useState(null);
@@ -24,6 +25,7 @@ function App() {
   const [activeTab, setActiveTab] = useState('carga');
   const [optimizedData, setOptimizedData] = useState(null);
   const [isOptimizing, setIsOptimizing] = useState(false);
+  const [showLocationModal, setShowLocationModal] = useState(false); // Nuevo estado
 
   const [confirmState, setConfirmState] = useState({
     isOpen: false,
@@ -180,24 +182,35 @@ function App() {
     });
   };
   
-  const handleOptimizeRoute = async () => {
+  const handleOptimizeRouteClick = () => {
     if (repartos.length < 1) {
       toast.info('Necesitas al menos 1 reparto para optimizar la ruta.');
       return;
     }
+    setShowLocationModal(true);
+  };
+
+  const startOptimization = async (startLocation = null) => {
     setIsOptimizing(true);
+    setShowLocationModal(false);
+
+    let currentLocation;
+
     try {
-      toast.info('Obteniendo tu ubicación actual...');
-      const position = await new Promise((resolve, reject) => {
-        // --- MEJORA DE PRECISIÓN ---
-        // Solicitamos alta precisión y aumentamos el tiempo de espera
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 10000, // Aumentado a 10 segundos
-          maximumAge: 0
+      if (typeof startLocation === 'string') {
+        currentLocation = startLocation;
+        toast.info(`Optimizando ruta desde: ${startLocation}`);
+      } else {
+        toast.info('Obteniendo tu ubicación actual...');
+        const position = await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0
+          });
         });
-      });
-      const currentLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
+        currentLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
+      }
       
       toast.info('Optimizando la ruta...');
       const { data } = await api.post('/repartos/optimize', { repartos, currentLocation });
@@ -296,8 +309,8 @@ function App() {
                   <RepartoForm onAddReparto={handleAddReparto} session={session} />
                   <div className="flex flex-wrap gap-4 mb-5">
                     {hasElevatedPermissions && (
-                      <button onClick={handleOptimizeRoute} disabled={isOptimizing || loading} className="px-5 py-2 border-none rounded-lg text-sm font-semibold cursor-pointer transition-transform duration-200 uppercase tracking-wider text-white bg-gradient-to-r from-cyan-500 to-blue-500 hover:scale-105 disabled:opacity-60">
-                        {isOptimizing ? 'Optimizando...' : '🗺️ Optimizar Ruta'}
+                      <button onClick={handleOptimizeRouteClick} disabled={loading} className="px-5 py-2 border-none rounded-lg text-sm font-semibold cursor-pointer transition-transform duration-200 uppercase tracking-wider text-white bg-gradient-to-r from-cyan-500 to-blue-500 hover:scale-105 disabled:opacity-60">
+                        🗺️ Optimizar Ruta
                       </button>
                     )}
                     <button onClick={handleSimpleExportExcel} className="px-5 py-2 border-none rounded-lg text-sm font-semibold cursor-pointer transition-transform duration-200 uppercase tracking-wider text-white bg-gradient-to-r from-green-500 to-teal-500 hover:scale-105">
@@ -324,6 +337,12 @@ function App() {
       <ConfirmModal isOpen={confirmState.isOpen} onClose={closeConfirmModal} onConfirm={confirmState.onConfirm} title={confirmState.title}>
         {confirmState.message}
       </ConfirmModal>
+      <LocationModal 
+        isOpen={showLocationModal} 
+        onClose={() => setShowLocationModal(false)} 
+        onOptimize={startOptimization}
+        isOptimizing={isOptimizing}
+      />
       <ToastContainer position="bottom-right" autoClose={3000} hideProgressBar={false} />
     </>
   );
