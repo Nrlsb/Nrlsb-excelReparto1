@@ -1,4 +1,4 @@
-// src/components/RepartosTable.js --- ARCHIVO MODIFICADO
+// src/components/RepartosTable.js
 import React, { useState, useMemo } from 'react';
 import { toast } from 'react-toastify';
 import RepartoRow from './RepartoRow';
@@ -10,7 +10,6 @@ function RepartosTable({ repartos, loading, onUpdateReparto, onDeleteReparto, is
   const sortedRepartos = useMemo(() => {
     const repartosArray = Array.isArray(repartos) ? repartos : [];
     
-    // Si es la vista optimizada, no aplicamos ordenamiento manual.
     if (isOptimizedView) {
         return repartosArray;
     }
@@ -54,7 +53,10 @@ function RepartosTable({ repartos, loading, onUpdateReparto, onDeleteReparto, is
     );
   };
 
-  const colSpan = isAdmin ? 7 : 6;
+  // Se ajusta el colspan para la nueva columna en la vista optimizada.
+  const colSpan = isAdmin 
+    ? (isOptimizedView ? 8 : 7) 
+    : (isOptimizedView ? 7 : 6);
 
   return (
     <div className="bg-white rounded-xl shadow-md overflow-hidden">
@@ -66,6 +68,8 @@ function RepartosTable({ repartos, loading, onUpdateReparto, onDeleteReparto, is
             <SortableHeader columnKey="direccion">Dirección</SortableHeader>
             <SortableHeader columnKey="horarios">Horarios</SortableHeader>
             <SortableHeader columnKey="bultos">Bultos</SortableHeader>
+            {/* Se añade la cabecera para la columna del tramo */}
+            {isOptimizedView && <th className="p-4 text-left bg-gradient-to-r from-purple-600 to-indigo-600 text-white uppercase text-sm font-bold tracking-wider">Tramo</th>}
             {isAdmin && <SortableHeader columnKey="agregado_por">Agregado por</SortableHeader>}
             <th className="p-4 text-center bg-gradient-to-r from-purple-600 to-indigo-600 text-white uppercase text-sm font-bold tracking-wider">Acciones</th> 
           </tr>

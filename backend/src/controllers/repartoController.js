@@ -97,13 +97,12 @@ export const optimizeRoute = async (req, res) => {
         const route = directionsData.routes[0];
         const optimizedOrder = route.waypoint_order;
         const overview_polyline = route.overview_polyline.points;
+        const routeLegs = route.legs; // Obtenemos los tramos de la ruta
 
-        // --- NUEVO: Calcular el tiempo total de viaje ---
-        const totalDurationInSeconds = route.legs.reduce((total, leg) => total + leg.duration.value, 0);
+        const totalDurationInSeconds = routeLegs.reduce((total, leg) => total + leg.duration.value, 0);
         const hours = Math.floor(totalDurationInSeconds / 3600);
         const minutes = Math.round((totalDurationInSeconds % 3600) / 60);
         const totalDurationText = `${hours > 0 ? `${hours}h ` : ''}${minutes}m`;
-        // --- FIN NUEVO ---
 
         const startPoint = {
             id: 'start_location',
@@ -116,15 +115,27 @@ export const optimizeRoute = async (req, res) => {
             created_at: new Date().toISOString()
         };
         
+        // --- MODIFICADO ---
+        // Se añade la información de distancia y duración de cada tramo (leg) a los repartos.
         const optimizedRepartos = [
             startPoint,
-            ...optimizedOrder.map(index => repartosWithCoords[index]),
+            ...optimizedOrder.map((repartoIndex, legIndex) => {
+                const reparto = repartosWithCoords[repartoIndex];
+                const leg = routeLegs[legIndex]; // El índice del tramo corresponde al de la parada
+                return {
+                    ...reparto,
+                    legData: {
+                        distance: leg.distance.text,
+                        duration: leg.duration.text,
+                    },
+                };
+            }),
         ];
 
         res.status(200).json({ 
             optimizedRepartos, 
             polyline: overview_polyline,
-            totalDuration: totalDurationText // Añadir la duración a la respuesta
+            totalDuration: totalDurationText
         });
 
     } catch (err) {

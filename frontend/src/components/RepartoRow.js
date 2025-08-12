@@ -1,3 +1,4 @@
+// src/components/RepartoRow.js
 import React, { useState } from 'react';
 
 function RepartoRow({ reparto, onUpdate, onDelete, isAdmin, orderNumber }) {
@@ -30,6 +31,8 @@ function RepartoRow({ reparto, onUpdate, onDelete, isAdmin, orderNumber }) {
         <td className="p-4 border-b border-gray-200"><input type="text" name="direccion" value={editedReparto.direccion} onChange={handleInputChange} className={commonInputClass} /></td>
         <td className="p-4 border-b border-gray-200"><input type="text" name="horarios" value={editedReparto.horarios} onChange={handleInputChange} className={commonInputClass} /></td>
         <td className="p-4 border-b border-gray-200"><input type="number" name="bultos" value={editedReparto.bultos} onChange={handleInputChange} min="1" className={commonInputClass} /></td>
+        {/* Se añade una celda vacía para mantener la alineación de columnas */}
+        {orderNumber && <td className="p-4 border-b border-gray-200"></td>}
         {isAdmin && <td className="p-4 border-b border-gray-200 text-gray-700">{reparto.agregado_por}</td>}
         <td className="p-4 border-b border-gray-200 text-center">
           <div className="flex justify-center gap-2">
@@ -56,6 +59,19 @@ function RepartoRow({ reparto, onUpdate, onDelete, isAdmin, orderNumber }) {
       <td className="p-4 border-b border-gray-200 text-gray-700">{reparto.direccion}</td>
       <td className="p-4 border-b border-gray-200 text-gray-700">{reparto.horarios}</td>
       <td className="p-4 border-b border-gray-200 text-gray-700">{reparto.bultos}</td>
+      {/* Se añade la celda que muestra la duración y distancia del tramo */}
+      {orderNumber && (
+        <td className="p-4 border-b border-gray-200 text-gray-700 text-sm">
+          {reparto.legData ? (
+            <div>
+              <span className="font-semibold">{reparto.legData.duration}</span>
+              <span className="text-gray-500"> ({reparto.legData.distance})</span>
+            </div>
+          ) : (
+            isStartLocation ? 'Punto de partida' : '-'
+          )}
+        </td>
+      )}
       {isAdmin && <td className="p-4 border-b border-gray-200 text-gray-700">{reparto.agregado_por}</td>}
       <td className="p-4 border-b border-gray-200 text-center">
         <div className="flex justify-center gap-2">
