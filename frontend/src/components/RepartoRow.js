@@ -26,6 +26,12 @@ function RepartoRow({ reparto, onUpdate, onDelete, isAdmin, orderNumber, eta, co
   
   const commonInputClass = "w-full p-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-400";
 
+  // --- NUEVO: URLs para navegación GPS ---
+  const fullAddress = `${reparto.direccion}, Esperanza, Santa Fe, Argentina`;
+  const gmapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(fullAddress)}`;
+  const wazeUrl = `https://waze.com/ul?q=${encodeURIComponent(fullAddress)}`;
+
+
   if (isEditing) {
     // El modo edición no necesita grandes cambios
     return (
@@ -89,9 +95,16 @@ function RepartoRow({ reparto, onUpdate, onDelete, isAdmin, orderNumber, eta, co
       )}
       {isAdmin && <td className="p-4 border-b border-gray-200 text-gray-700">{reparto.agregado_por}</td>}
       <td className="p-4 border-b border-gray-200 text-center">
-        <div className="flex justify-center gap-2">
-          <button disabled={isStartLocation} className="px-3 py-1 text-sm font-semibold text-white bg-blue-500 rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => setIsEditing(true)}>✏️</button>
-          <button disabled={isStartLocation} className="px-3 py-1 text-sm font-semibold text-white bg-red-500 rounded-md hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => onDelete(reparto.id)}>🗑️</button>
+        {/* --- MODIFICADO: Se añaden los botones de navegación --- */}
+        <div className="flex justify-center gap-1 flex-wrap">
+          <button disabled={isStartLocation} className="px-2 py-1 text-sm font-semibold text-white bg-blue-500 rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => setIsEditing(true)}>✏️</button>
+          <button disabled={isStartLocation} className="px-2 py-1 text-sm font-semibold text-white bg-red-500 rounded-md hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => onDelete(reparto.id)}>🗑️</button>
+          {!isStartLocation && (
+            <>
+              <a href={gmapsUrl} target="_blank" rel="noopener noreferrer" className="px-2 py-1 text-sm font-semibold text-white bg-green-500 rounded-md hover:bg-green-600 inline-block">🗺️</a>
+              <a href={wazeUrl} target="_blank" rel="noopener noreferrer" className="px-2 py-1 text-sm font-semibold text-white bg-cyan-500 rounded-md hover:bg-cyan-600 inline-block">🚗</a>
+            </>
+          )}
         </div>
       </td>
     </tr>
