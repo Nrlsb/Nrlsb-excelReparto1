@@ -1,5 +1,6 @@
 // src/components/RepartoRow.js
 import React, { useState } from 'react';
+import { toast } from 'react-toastify'; // <-- CORRECCIÓN: Se añade la importación que faltaba
 
 function RepartoRow({ reparto, onUpdate, onDelete, isAdmin, orderNumber, eta, conflictInfo, isOptimizedView }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -27,7 +28,6 @@ function RepartoRow({ reparto, onUpdate, onDelete, isAdmin, orderNumber, eta, co
   const gmapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(fullAddress)}`;
   const wazeUrl = `https://waze.com/ul?q=${encodeURIComponent(fullAddress)}`;
 
-  // --- MODIFICACIÓN CLAVE PARA RESPONSIVE ---
   // Componente interno para las celdas en vista móvil
   const MobileCell = ({ label, children }) => (
     <div className="flex justify-between items-center p-3 border-b border-gray-200">
@@ -60,7 +60,6 @@ function RepartoRow({ reparto, onUpdate, onDelete, isAdmin, orderNumber, eta, co
   const conflictClass = conflictInfo?.hasConflict ? 'bg-red-100' : '';
   const startClass = isStartLocation ? 'bg-green-100' : 'bg-white';
   
-  // --- RENDERIZADO COMPLETAMENTE NUEVO PARA MÓVIL ---
   return (
     <>
       {/* --- VISTA MÓVIL (TARJETA) --- */}
