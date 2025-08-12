@@ -4,7 +4,7 @@ Una aplicación web full-stack moderna para la gestión de repartos de forma col
 
 ### [**Ver Demo en Vivo**](https://nrlsb-excel-reparto1.vercel.app/)
 
-![Imagen de la aplicación de repartos funcionando](https://i.imgur.com/gKk9p3v.jpg)
+![Imagen de la aplicación de repartos funcionando en escritorio y móvil](https://i.imgur.com/gKk9p3v.jpg)
 
 ---
 
@@ -12,13 +12,20 @@ Una aplicación web full-stack moderna para la gestión de repartos de forma col
 
 -   **Autenticación y Perfiles de Usuario**: Sistema completo de registro e inicio de sesión. Cada usuario tiene un alias personalizable.
 -   **Sistema de Roles**:
-    -   **Admin/Especial**: Pueden ver, editar y eliminar los repartos de **todos** los usuarios. Tienen acceso exclusivo a la optimización y visualización de rutas en el mapa.
-    -   **User**: Rol estándar que solo puede crear, leer, actualizar y eliminar sus propios repartos.
+    -   **Admin/Especial**: Pueden ver, editar y eliminar los repartos de **todos** los usuarios.
+    -   **User**: Rol estándar que solo puede gestionar sus propios repartos.
 -   **CRUD Completo y Privado**: Los usuarios estándar solo pueden gestionar sus propios repartos, garantizando la privacidad de los datos.
--   **Optimización y Visualización de Rutas (Solo Admin/Especial)**: Los administradores pueden calcular la ruta más eficiente para los repartos del día, partiendo desde su ubicación actual. La ruta optimizada se muestra en un mapa interactivo (Leaflet) con el orden de las paradas.
 -   **Sincronización en Tiempo Real**: Los cambios se reflejan instantáneamente en todas las pantallas de los usuarios gracias a las suscripciones en tiempo real de Supabase.
--   **Interfaz Moderna y Responsiva**: Desarrollada con **React** y estilizada con **Tailwind CSS**. La navegación por pestañas separa la carga de datos de la visualización de la ruta.
--   **Exportación a Excel**: Descarga la lista de repartos (respetando los permisos de rol) en un archivo `.xlsx`, ya sea en un formato simple o utilizando una plantilla corporativa desde el backend.
+-   **Interfaz Completamente Responsiva**: La aplicación se adapta a cualquier tamaño de pantalla. En dispositivos móviles, las tablas se convierten en un formato de tarjetas fácil de leer y usar.
+-   **Exportación a Excel**: Descarga la lista de repartos (respetando los permisos de rol) en un archivo `.xlsx`, ya sea en un formato simple o utilizando una plantilla corporativa.
+
+### Funcionalidades Avanzadas de Ruta (Solo Admin/Especial)
+
+-   **Optimización de Ruta**: Calcula la ruta más eficiente para los repartos del día usando la API de Google Maps, partiendo desde la ubicación actual del usuario o una dirección manual.
+-   **Visualización en Mapa Interactivo**: La ruta optimizada se muestra en un mapa de Leaflet con marcadores para cada parada.
+-   **Cálculo de Tramos y ETA**: Muestra la distancia, duración de cada tramo y la **hora de llegada estimada (ETA)** para cada punto de entrega.
+-   **Alertas de Ventanas Horarias**: El sistema analiza los horarios de entrega y **resalta visualmente** cualquier reparto que pueda tener un conflicto (llegada temprana o tardía), permitiendo al administrador ajustar la ruta manualmente.
+-   **Integración con Navegación GPS**: Con un solo clic, el repartidor puede abrir la dirección de un reparto directamente en **Google Maps** o **Waze** para iniciar la navegación.
 
 ---
 
@@ -49,14 +56,15 @@ El repositorio está organizado en dos carpetas principales:
 -   Node.js (v16 o superior)
 -   npm o yarn
 -   Una cuenta gratuita en [Supabase](https://supabase.com/)
+-   Una clave de API de [Google Maps Platform](https://cloud.google.com/maps-platform/) con las APIs "Directions" y "Geocoding" habilitadas.
 
 ### 1. Configuración de Supabase
 
 1.  Crea un nuevo proyecto en Supabase.
-2.  Dentro de tu proyecto, ve a `SQL Editor` > `+ New query` y ejecuta el siguiente script para crear las tablas `repartos` y `profiles`, junto con los roles, políticas de seguridad y triggers necesarios.
+2.  Dentro de tu proyecto, ve a `SQL Editor` > `+ New query` y ejecuta el siguiente script para crear las tablas, roles y políticas de seguridad.
 
     ```sql
-    -- 1. Tabla de Repartos
+    -- 1. Tabla de Repartos (con estado)
     CREATE TABLE repartos (
       id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
       destino TEXT NOT NULL,
@@ -65,7 +73,8 @@ El repositorio está organizado en dos carpetas principales:
       bultos INT NOT NULL,
       agregado_por TEXT,
       created_at TIMESTAMPTZ DEFAULT NOW(),
-      user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE
+      user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+      estado TEXT DEFAULT 'pendiente' NOT NULL -- Columna para el estado del reparto
     );
     ALTER TABLE public.repartos ENABLE ROW LEVEL SECURITY;
 
@@ -83,7 +92,7 @@ El repositorio está organizado en dos carpetas principales:
     CREATE TABLE public.profiles (
       id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
       username TEXT UNIQUE,
-      role TEXT DEFAULT 'user' NOT NULL, -- Campo de rol añadido
+      role TEXT DEFAULT 'user' NOT NULL,
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
     ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
@@ -129,20 +138,7 @@ El repositorio está organizado en dos carpetas principales:
 
 3.  **Asignar Roles**: Para dar permisos de `admin` o `especial` a un usuario, ve a `Table Editor` > `profiles` y cambia manualmente el valor en la columna `role` para el usuario deseado.
 
-4.  **Para Usuarios Existentes**: Si ya tenías usuarios antes de añadir la columna `role`, ejecuta el siguiente script para crear sus perfiles:
-    ```sql
-    INSERT INTO public.profiles (id, username, role)
-    SELECT 
-        u.id,
-        u.raw_user_meta_data->>'username' AS username,
-        'user' AS role
-    FROM 
-        auth.users u
-    WHERE 
-        NOT EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = u.id);
-    ```
-
-5.  Ve a `Settings` > `API` y copia tu **URL del Proyecto**, tu clave **anon (public)** y tu clave **service_role (secret)**.
+4.  Ve a `Settings` > `API` y copia tu **URL del Proyecto**, tu clave **anon (public)** y tu clave **service_role (secret)**.
 
 ### 2. Configuración del Backend
 
@@ -152,6 +148,7 @@ El repositorio está organizado en dos carpetas principales:
     ```env
     SUPABASE_URL=TU_URL_DE_SUPABASE
     SUPABASE_SERVICE_KEY=TU_CLAVE_SECRETA_SERVICE_ROLE
+    GOOGLE_MAPS_API_KEY=TU_CLAVE_DE_API_DE_GOOGLE_MAPS
     PORT=3001
     ```
 4.  Inicia el servidor: `npm run dev`.
@@ -173,7 +170,7 @@ El repositorio está organizado en dos carpetas principales:
 ## ☁️ Despliegue
 
 -   **Frontend (React)**: Desplegado en **Vercel**. Configura las variables de entorno (`REACT_APP_*`) en el panel de Vercel. `REACT_APP_API_URL` debe apuntar a la URL pública de tu backend.
--   **Backend (Node.js)**: Desplegado en **Render**. Configura las variables de entorno (`SUPABASE_URL`, `SUPABASE_SERVICE_KEY`) en el panel de Render.
+-   **Backend (Node.js)**: Desplegado en **Render**. Configura las variables de entorno (`SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `GOOGLE_MAPS_API_KEY`) en el panel de Render.
 
 La configuración de **CORS** en `backend/src/server.js` está ajustada para aceptar peticiones desde el frontend desplegado y desde `localhost` para desarrollo.
 
