@@ -189,9 +189,11 @@ function App() {
     try {
       toast.info('Obteniendo tu ubicación actual...');
       const position = await new Promise((resolve, reject) => {
+        // --- MEJORA DE PRECISIÓN ---
+        // Solicitamos alta precisión y aumentamos el tiempo de espera
         navigator.geolocation.getCurrentPosition(resolve, reject, {
           enableHighAccuracy: true,
-          timeout: 5000,
+          timeout: 10000, // Aumentado a 10 segundos
           maximumAge: 0
         });
       });
@@ -200,8 +202,6 @@ function App() {
       toast.info('Optimizando la ruta...');
       const { data } = await api.post('/repartos/optimize', { repartos, currentLocation });
       
-      // --- CORRECCIÓN ---
-      // Almacenamos 'polyline' en singular
       setOptimizedData({ repartos: data.optimizedRepartos, polyline: data.polyline });
       setActiveTab('ruta');
       toast.success('Ruta optimizada con éxito.');
@@ -314,8 +314,6 @@ function App() {
                 </>
               )}
               {activeTab === 'ruta' && optimizedData && hasElevatedPermissions && (
-                // --- CORRECCIÓN ---
-                // Pasamos 'polyline' en singular
                 <Ruta repartos={optimizedData.repartos} polyline={optimizedData.polyline} onUpdateReparto={handleUpdateReparto} onDeleteReparto={handleDeleteReparto} isAdmin={hasElevatedPermissions} />
               )}
             </div>
