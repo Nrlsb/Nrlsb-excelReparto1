@@ -125,9 +125,10 @@ function RepartosTable({ repartos, loading, onUpdateReparto, onDeleteReparto, is
     : (isOptimizedView ? 7 : 6);
 
   return (
-    <div className="bg-white rounded-xl shadow-md overflow-x-auto">
-      <table className="w-full border-collapse min-w-[640px]">
-        {/* --- MODIFICADO: Ocultamos la cabecera en móviles --- */}
+    // --- MODIFICADO: Se elimina el overflow-x-auto ---
+    <div className="bg-white rounded-xl shadow-md">
+      {/* --- MODIFICADO: Se elimina min-w-[640px] para permitir que la tabla se ajuste --- */}
+      <table className="w-full border-collapse">
         <thead className="hidden sm:table-header-group">
           <tr>
             <SortableHeader columnKey="id">{isOptimizedView ? 'Orden' : 'ID'}</SortableHeader>
@@ -140,9 +141,10 @@ function RepartosTable({ repartos, loading, onUpdateReparto, onDeleteReparto, is
             <th className="p-4 text-center bg-gradient-to-r from-purple-600 to-indigo-600 text-white uppercase text-sm font-bold tracking-wider">Acciones</th> 
           </tr>
         </thead>
-        <tbody>
+        {/* --- MODIFICADO: Se usa un div en móvil para un mejor control del layout --- */}
+        <tbody className="block sm:table-row-group">
           {loading ? (
-            <tr><td colSpan={colSpan} className="text-center p-10 text-gray-500">Cargando...</td></tr>
+            <tr className="block sm:table-row"><td colSpan={colSpan} className="block sm:table-cell text-center p-10 text-gray-500">Cargando...</td></tr>
           ) : sortedRepartos.length > 0 ? (
             sortedRepartos.map((reparto, index) => (
               <RepartoRow 
@@ -158,7 +160,7 @@ function RepartosTable({ repartos, loading, onUpdateReparto, onDeleteReparto, is
               />
             ))
           ) : (
-            <tr><td colSpan={colSpan} className="text-center p-10 text-gray-500">No hay repartos cargados.</td></tr>
+            <tr className="block sm:table-row"><td colSpan={colSpan} className="block sm:table-cell text-center p-10 text-gray-500">No hay repartos cargados.</td></tr>
           )}
         </tbody>
       </table>
