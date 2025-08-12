@@ -3,6 +3,7 @@ import React from 'react';
 import Map from './Map';
 import RepartosTable from './RepartosTable';
 
+// --- CORRECCIÓN ---
 // La prop aquí debe ser "polylines" (en plural) para recibir el array de tramos
 function Ruta({ repartos, polylines, onUpdateReparto, onDeleteReparto, isAdmin }) {
   return (

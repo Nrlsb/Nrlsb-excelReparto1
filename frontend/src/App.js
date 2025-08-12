@@ -200,6 +200,8 @@ function App() {
       toast.info('Optimizando la ruta...');
       const { data } = await api.post('/repartos/optimize', { repartos, currentLocation });
       
+      // --- CORRECCIÓN ---
+      // Almacenamos 'polylines' en plural
       setOptimizedData({ repartos: data.optimizedRepartos, polylines: data.polylines });
       setActiveTab('ruta');
       toast.success('Ruta optimizada con éxito.');
@@ -312,6 +314,8 @@ function App() {
                 </>
               )}
               {activeTab === 'ruta' && optimizedData && hasElevatedPermissions && (
+                // --- CORRECCIÓN ---
+                // Pasamos 'polylines' en plural
                 <Ruta repartos={optimizedData.repartos} polylines={optimizedData.polylines} onUpdateReparto={handleUpdateReparto} onDeleteReparto={handleDeleteReparto} isAdmin={hasElevatedPermissions} />
               )}
             </div>

@@ -85,7 +85,8 @@ export const optimizeRoute = async (req, res) => {
         const route = directionsData.routes[0];
         const optimizedOrder = route.waypoint_order;
         
-        // Corregimos la extracción de las polilíneas de cada tramo (leg)
+        // --- CORRECCIÓN ---
+        // Volvemos a extraer las polilíneas de cada tramo (leg)
         const legPolylines = route.legs.map(leg => {
             if (leg && leg.overview_polyline && leg.overview_polyline.points) {
                 return leg.overview_polyline.points;
@@ -118,6 +119,7 @@ export const optimizeRoute = async (req, res) => {
             ];
         }
 
+        // Enviamos el array de polilíneas en la respuesta
         res.status(200).json({ optimizedRepartos, polylines: legPolylines });
 
     } catch (err) {

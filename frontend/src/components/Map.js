@@ -14,7 +14,9 @@ function BoundsFitter({ bounds }) {
   return null;
 }
 
-function Map({ repartos, polylines }) { // Cambiamos polyline por polylines
+// --- CORRECCIÓN ---
+// Cambiamos la prop de 'polyline' a 'polylines' para recibir el array de tramos
+function Map({ repartos, polylines }) { 
   const routeSegments = useMemo(() => {
     if (!polylines || !Array.isArray(polylines)) return [];
     // Decodificamos cada polilínea del array
