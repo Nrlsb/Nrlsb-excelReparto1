@@ -39,11 +39,12 @@ export const optimizeRoute = async (req, res) => {
         let startLocationCoords;
         let startLocationAddress = 'Tu ubicación actual';
 
-        // --- LÓGICA PARA MANEJAR DIRECCIÓN MANUAL O GEOLOCALIZACIÓN ---
         if (typeof currentLocation === 'string') {
-            // Si es un string, es una dirección manual que necesita ser geocodificada
+            // --- MEJORA DE PRECISIÓN ---
+            // Añadimos la ciudad y provincia para mejorar la geocodificación
+            const fullManualAddress = `${currentLocation}, Esperanza, Santa Fe, Argentina`;
             startLocationAddress = currentLocation;
-            const geocodeParams = new URLSearchParams({ address: startLocationAddress, key: apiKey }).toString();
+            const geocodeParams = new URLSearchParams({ address: fullManualAddress, key: apiKey }).toString();
             const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?${geocodeParams}`;
             const geocodeResponse = await axios.get(geocodeUrl);
             
@@ -53,7 +54,6 @@ export const optimizeRoute = async (req, res) => {
             startLocationCoords = geocodeResponse.data.results[0].geometry.location;
 
         } else if (currentLocation && typeof currentLocation.lat === 'number' && typeof currentLocation.lng === 'number') {
-            // Si es un objeto con lat/lng, es de la geolocalización del navegador
             startLocationCoords = currentLocation;
         } else {
             return res.status(400).json({ error: 'No se proporcionó un punto de partida válido.' });
@@ -78,7 +78,7 @@ export const optimizeRoute = async (req, res) => {
         });
 
         const origin = `${startLocationCoords.lat},${startLocationCoords.lng}`;
-        const destination = origin; // Ruta circular
+        const destination = origin;
         const waypoints = repartosWithCoords.map(r => `${r.location.lat},${r.location.lng}`);
         
         const directionParams = new URLSearchParams({
