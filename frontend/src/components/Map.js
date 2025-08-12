@@ -15,13 +15,14 @@ function BoundsFitter({ bounds }) {
 }
 
 // --- CORRECCIÓN ---
-// Cambiamos la prop de 'polyline' a 'polylines' para recibir el array de tramos
-function Map({ repartos, polylines }) { 
-  const routeSegments = useMemo(() => {
-    if (!polylines || !Array.isArray(polylines)) return [];
-    // Decodificamos cada polilínea del array
-    return polylines.map(p => polylineUtil.decode(p));
-  }, [polylines]);
+// Cambiamos la prop de 'polylines' a 'polyline' para recibir una única cadena
+function Map({ repartos, polyline }) { 
+  const routePath = useMemo(() => {
+    // Si no hay polilínea, devolvemos un array vacío
+    if (!polyline) return [];
+    // Decodificamos la polilínea
+    return polylineUtil.decode(polyline);
+  }, [polyline]);
 
   const repartosConCoordenadas = useMemo(() => 
     (repartos || []).filter(r => r.location && typeof r.location.lat === 'number' && typeof r.location.lng === 'number'),
@@ -32,9 +33,6 @@ function Map({ repartos, polylines }) {
     if (repartosConCoordenadas.length === 0) return null;
     return repartosConCoordenadas.map(r => [r.location.lat, r.location.lng]);
   }, [repartosConCoordenadas]);
-
-  // Paleta de colores para los tramos de la ruta
-  const colors = ['#3388ff', '#ff3333', '#33ff33', '#ff33ff', '#33ffff', '#ffff33'];
 
   if (repartosConCoordenadas.length === 0) {
     return (
@@ -59,14 +57,13 @@ function Map({ repartos, polylines }) {
           </Marker>
         ))}
         
-        {/* Dibujamos cada tramo de la ruta con un color diferente */}
-        {routeSegments.map((segment, index) => (
+        {/* Dibujamos la ruta completa */}
+        {routePath.length > 0 && (
           <Polyline 
-            key={index}
-            pathOptions={{ color: colors[index % colors.length], weight: 5, opacity: 0.7 }} 
-            positions={segment} 
+            pathOptions={{ color: '#3388ff', weight: 5, opacity: 0.7 }} 
+            positions={routePath} 
           />
-        ))}
+        )}
         
         <BoundsFitter bounds={bounds} />
       </MapContainer>

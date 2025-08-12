@@ -201,8 +201,8 @@ function App() {
       const { data } = await api.post('/repartos/optimize', { repartos, currentLocation });
       
       // --- CORRECCIÓN ---
-      // Almacenamos 'polylines' en plural
-      setOptimizedData({ repartos: data.optimizedRepartos, polylines: data.polylines });
+      // Almacenamos 'polyline' en singular
+      setOptimizedData({ repartos: data.optimizedRepartos, polyline: data.polyline });
       setActiveTab('ruta');
       toast.success('Ruta optimizada con éxito.');
     } catch (error) {
@@ -315,8 +315,8 @@ function App() {
               )}
               {activeTab === 'ruta' && optimizedData && hasElevatedPermissions && (
                 // --- CORRECCIÓN ---
-                // Pasamos 'polylines' en plural
-                <Ruta repartos={optimizedData.repartos} polylines={optimizedData.polylines} onUpdateReparto={handleUpdateReparto} onDeleteReparto={handleDeleteReparto} isAdmin={hasElevatedPermissions} />
+                // Pasamos 'polyline' en singular
+                <Ruta repartos={optimizedData.repartos} polyline={optimizedData.polyline} onUpdateReparto={handleUpdateReparto} onDeleteReparto={handleDeleteReparto} isAdmin={hasElevatedPermissions} />
               )}
             </div>
           </div>

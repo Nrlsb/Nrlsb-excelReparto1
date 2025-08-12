@@ -4,13 +4,13 @@ import Map from './Map';
 import RepartosTable from './RepartosTable';
 
 // --- CORRECCIÓN ---
-// La prop aquí debe ser "polylines" (en plural) para recibir el array de tramos
-function Ruta({ repartos, polylines, onUpdateReparto, onDeleteReparto, isAdmin }) {
+// La prop aquí debe ser "polyline" (en singular)
+function Ruta({ repartos, polyline, onUpdateReparto, onDeleteReparto, isAdmin }) {
   return (
     <div>
       <h2 className="text-2xl font-bold text-gray-700 mb-4">Visualización de la Ruta</h2>
-      {/* Y se la pasamos al componente Map con el mismo nombre "polylines" */}
-      <Map repartos={repartos} polylines={polylines} />
+      {/* Y se la pasamos al componente Map con el mismo nombre "polyline" */}
+      <Map repartos={repartos} polyline={polyline} />
       <RepartosTable
         repartos={repartos}
         loading={false}

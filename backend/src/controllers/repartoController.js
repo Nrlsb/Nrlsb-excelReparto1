@@ -4,7 +4,6 @@ import ExcelJS from 'exceljs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import axios from 'axios';
-import polylineUtil from 'polyline-encoded'; // Importamos la utilidad de polilíneas
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -86,17 +85,9 @@ export const optimizeRoute = async (req, res) => {
         const route = directionsData.routes[0];
         const optimizedOrder = route.waypoint_order;
         
-        // --- NUEVA LÓGICA ---
-        // Construimos la polilínea completa uniendo los puntos de cada tramo en el orden correcto.
-        let fullPath = [];
-        route.legs.forEach(leg => {
-            leg.steps.forEach(step => {
-                const decodedPoints = polylineUtil.decode(step.polyline.points);
-                fullPath = fullPath.concat(decodedPoints);
-            });
-        });
-        const fullPolyline = polylineUtil.encode(fullPath);
-
+        // --- CORRECCIÓN ---
+        // Extraemos la polilínea general de la ruta completa.
+        const overview_polyline = route.overview_polyline.points;
 
         let optimizedRepartos;
 
@@ -123,8 +114,8 @@ export const optimizeRoute = async (req, res) => {
             ];
         }
 
-        // Enviamos la polilínea única y correcta en la respuesta
-        res.status(200).json({ optimizedRepartos, polyline: fullPolyline });
+        // Enviamos la polilínea única en la respuesta
+        res.status(200).json({ optimizedRepartos, polyline: overview_polyline });
 
     } catch (err) {
         console.error('Error en la optimización de ruta con Google Maps:', err.message);
