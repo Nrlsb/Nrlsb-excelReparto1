@@ -3,13 +3,18 @@ import React from 'react';
 import Map from './Map';
 import RepartosTable from './RepartosTable';
 
-// --- CORRECCIÓN ---
-// La prop aquí debe ser "polyline" (en singular)
-function Ruta({ repartos, polyline, onUpdateReparto, onDeleteReparto, isAdmin }) {
+// --- NUEVO: Recibir y mostrar la duración total ---
+function Ruta({ repartos, polyline, totalDuration, onUpdateReparto, onDeleteReparto, isAdmin }) {
   return (
     <div>
-      <h2 className="text-2xl font-bold text-gray-700 mb-4">Visualización de la Ruta</h2>
-      {/* Y se la pasamos al componente Map con el mismo nombre "polyline" */}
+      <div className="flex justify-between items-center mb-4 flex-wrap gap-4">
+        <h2 className="text-2xl font-bold text-gray-700">Visualización de la Ruta</h2>
+        {totalDuration && (
+          <div className="bg-blue-100 text-blue-800 text-lg font-semibold px-4 py-2 rounded-lg shadow-sm">
+            🕒 Tiempo Estimado: <span className="font-bold">{totalDuration}</span>
+          </div>
+        )}
+      </div>
       <Map repartos={repartos} polyline={polyline} />
       <RepartosTable
         repartos={repartos}

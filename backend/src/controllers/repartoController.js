@@ -40,8 +40,6 @@ export const optimizeRoute = async (req, res) => {
         let startLocationAddress = 'Tu ubicación actual';
 
         if (typeof currentLocation === 'string') {
-            // --- MEJORA DE PRECISIÓN ---
-            // Añadimos la ciudad y provincia para mejorar la geocodificación
             const fullManualAddress = `${currentLocation}, Esperanza, Santa Fe, Argentina`;
             startLocationAddress = currentLocation;
             const geocodeParams = new URLSearchParams({ address: fullManualAddress, key: apiKey }).toString();
@@ -98,8 +96,14 @@ export const optimizeRoute = async (req, res) => {
 
         const route = directionsData.routes[0];
         const optimizedOrder = route.waypoint_order;
-        
         const overview_polyline = route.overview_polyline.points;
+
+        // --- NUEVO: Calcular el tiempo total de viaje ---
+        const totalDurationInSeconds = route.legs.reduce((total, leg) => total + leg.duration.value, 0);
+        const hours = Math.floor(totalDurationInSeconds / 3600);
+        const minutes = Math.round((totalDurationInSeconds % 3600) / 60);
+        const totalDurationText = `${hours > 0 ? `${hours}h ` : ''}${minutes}m`;
+        // --- FIN NUEVO ---
 
         const startPoint = {
             id: 'start_location',
@@ -117,7 +121,11 @@ export const optimizeRoute = async (req, res) => {
             ...optimizedOrder.map(index => repartosWithCoords[index]),
         ];
 
-        res.status(200).json({ optimizedRepartos, polyline: overview_polyline });
+        res.status(200).json({ 
+            optimizedRepartos, 
+            polyline: overview_polyline,
+            totalDuration: totalDurationText // Añadir la duración a la respuesta
+        });
 
     } catch (err) {
         console.error('Error en la optimización de ruta con Google Maps:', err.message);

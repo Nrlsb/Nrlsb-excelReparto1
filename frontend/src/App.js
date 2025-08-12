@@ -13,7 +13,7 @@ import RepartoForm from './components/RepartoForm';
 import RepartosTable from './components/RepartosTable';
 import ConfirmModal from './components/ConfirmModal';
 import Ruta from './components/Ruta';
-import LocationModal from './components/LocationModal'; // Importar el nuevo modal
+import LocationModal from './components/LocationModal';
 
 function App() {
   const [session, setSession] = useState(null);
@@ -25,7 +25,7 @@ function App() {
   const [activeTab, setActiveTab] = useState('carga');
   const [optimizedData, setOptimizedData] = useState(null);
   const [isOptimizing, setIsOptimizing] = useState(false);
-  const [showLocationModal, setShowLocationModal] = useState(false); // Nuevo estado
+  const [showLocationModal, setShowLocationModal] = useState(false);
 
   const [confirmState, setConfirmState] = useState({
     isOpen: false,
@@ -215,7 +215,12 @@ function App() {
       toast.info('Optimizando la ruta...');
       const { data } = await api.post('/repartos/optimize', { repartos, currentLocation });
       
-      setOptimizedData({ repartos: data.optimizedRepartos, polyline: data.polyline });
+      // --- NUEVO: Guardar la duración total ---
+      setOptimizedData({ 
+        repartos: data.optimizedRepartos, 
+        polyline: data.polyline,
+        totalDuration: data.totalDuration 
+      });
       setActiveTab('ruta');
       toast.success('Ruta optimizada con éxito.');
     } catch (error) {
@@ -327,7 +332,14 @@ function App() {
                 </>
               )}
               {activeTab === 'ruta' && optimizedData && hasElevatedPermissions && (
-                <Ruta repartos={optimizedData.repartos} polyline={optimizedData.polyline} onUpdateReparto={handleUpdateReparto} onDeleteReparto={handleDeleteReparto} isAdmin={hasElevatedPermissions} />
+                <Ruta 
+                  repartos={optimizedData.repartos} 
+                  polyline={optimizedData.polyline} 
+                  totalDuration={optimizedData.totalDuration} // Pasar la duración
+                  onUpdateReparto={handleUpdateReparto} 
+                  onDeleteReparto={handleDeleteReparto} 
+                  isAdmin={hasElevatedPermissions} 
+                />
               )}
             </div>
           </div>
