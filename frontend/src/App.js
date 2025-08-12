@@ -116,19 +116,35 @@ function App() {
     if (!session) return;
     const channel = supabase
       .channel('repartos_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'repartos' }, () => {
-        fetchRepartos();
-        setOptimizedData(null);
-        if (!hasElevatedPermissions) {
-          setActiveTab('carga');
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'repartos' }, (payload) => {
+        // --- MODIFICADO ---
+        // Actualizamos el estado localmente para reflejar el cambio de estado del reparto
+        if (payload.eventType === 'UPDATE') {
+          setRepartos(currentRepartos => 
+            currentRepartos.map(r => r.id === payload.new.id ? payload.new : r)
+          );
+          if (optimizedData) {
+            setOptimizedData(prevData => ({
+              ...prevData,
+              repartos: prevData.repartos.map(r => r.id === payload.new.id ? {...r, ...payload.new} : r)
+            }));
+          }
+        } else {
+          // Para INSERT y DELETE, recargamos todo por simplicidad
+          fetchRepartos();
+          setOptimizedData(null);
+          if (!hasElevatedPermissions) {
+            setActiveTab('carga');
+          }
         }
       })
       .subscribe();
     return () => supabase.removeChannel(channel);
-  }, [session, fetchRepartos, hasElevatedPermissions]);
+  }, [session, fetchRepartos, hasElevatedPermissions, optimizedData]);
 
   const handleAddReparto = async (newReparto) => {
     try {
+      // El estado por defecto 'pendiente' se asigna en la DB
       await api.post('/repartos', { ...newReparto, user_id: session.user.id });
       toast.success('Reparto agregado.');
     } catch (error) {
@@ -215,7 +231,6 @@ function App() {
       toast.info('Optimizando la ruta...');
       const { data } = await api.post('/repartos/optimize', { repartos, currentLocation });
       
-      // --- NUEVO: Guardar la duración total ---
       setOptimizedData({ 
         repartos: data.optimizedRepartos, 
         polyline: data.polyline,
@@ -335,7 +350,7 @@ function App() {
                 <Ruta 
                   repartos={optimizedData.repartos} 
                   polyline={optimizedData.polyline} 
-                  totalDuration={optimizedData.totalDuration} // Pasar la duración
+                  totalDuration={optimizedData.totalDuration}
                   onUpdateReparto={handleUpdateReparto} 
                   onDeleteReparto={handleDeleteReparto} 
                   isAdmin={hasElevatedPermissions} 
