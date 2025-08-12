@@ -1,23 +1,28 @@
 // src/components/LocationModal.js
 import React, { useState } from 'react';
+import { toast } from 'react-toastify';
 
 function LocationModal({ isOpen, onClose, onOptimize, isOptimizing }) {
   const [manualAddress, setManualAddress] = useState('');
+  // --- NUEVO: Estado para el modelo de tráfico ---
+  const [trafficModel, setTrafficModel] = useState('best_guess');
 
   if (!isOpen) {
     return null;
   }
 
   const handleUseCurrentLocation = () => {
-    onOptimize(); // No se pasan argumentos para usar la geolocalización
+    // --- MODIFICADO: Se pasa el modelo de tráfico ---
+    onOptimize(null, trafficModel);
   };
 
   const handleUseManualAddress = () => {
     if (manualAddress.trim() === '') {
-      alert('Por favor, ingresa una dirección.'); // Se puede reemplazar con un toast
+      toast.warn('Por favor, ingresa una dirección.');
       return;
     }
-    onOptimize(manualAddress);
+    // --- MODIFICADO: Se pasa la dirección y el modelo de tráfico ---
+    onOptimize(manualAddress, trafficModel);
   };
 
   return (
@@ -29,8 +34,27 @@ function LocationModal({ isOpen, onClose, onOptimize, isOptimizing }) {
         >
           &times;
         </button>
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">Punto de Partida</h2>
+        {/* --- MODIFICADO: Título actualizado --- */}
+        <h2 className="text-2xl font-bold text-gray-800 mb-6">Punto de Partida y Opciones</h2>
         
+        {/* --- NUEVO: Selector para el modelo de tráfico --- */}
+        <div className="mb-6">
+            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="trafficModel">
+              Modelo de Tráfico
+            </label>
+            <select
+              id="trafficModel"
+              value={trafficModel}
+              onChange={(e) => setTrafficModel(e.target.value)}
+              className="w-full p-3 border-2 border-gray-300 rounded-lg text-base transition duration-300 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+            >
+              <option value="best_guess">Mejor estimación (recomendado)</option>
+              <option value="pessimistic">Pesimista</option>
+              <option value="optimistic">Optimista</option>
+            </select>
+            <p className="text-xs text-gray-500 mt-1">"Mejor estimación" utiliza datos históricos y en tiempo real para una predicción más precisa.</p>
+        </div>
+
         <div className="space-y-4">
           <button
             onClick={handleUseCurrentLocation}

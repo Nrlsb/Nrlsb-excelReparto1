@@ -24,7 +24,8 @@ async function getUserRole(userId) {
 }
 
 export const optimizeRoute = async (req, res) => {
-    const { repartos, currentLocation } = req.body;
+    // --- MODIFICADO: Se recibe el trafficModel desde el frontend ---
+    const { repartos, currentLocation, trafficModel } = req.body;
     const apiKey = process.env.GOOGLE_MAPS_API_KEY;
 
     if (!apiKey) {
@@ -79,11 +80,14 @@ export const optimizeRoute = async (req, res) => {
         const destination = origin;
         const waypoints = repartosWithCoords.map(r => `${r.location.lat},${r.location.lng}`);
         
+        // --- MODIFICADO: Se añaden los parámetros de tráfico a la petición ---
         const directionParams = new URLSearchParams({
             origin: origin,
             destination: destination,
             waypoints: `optimize:true|${waypoints.join('|')}`,
             key: apiKey,
+            departure_time: 'now', // Calcula la ruta considerando el tráfico actual.
+            traffic_model: trafficModel || 'best_guess', // Usa el modelo de tráfico del frontend.
         }).toString();
 
         const directionsUrl = `https://maps.googleapis.com/maps/api/directions/json?${directionParams}`;
@@ -97,12 +101,15 @@ export const optimizeRoute = async (req, res) => {
         const route = directionsData.routes[0];
         const optimizedOrder = route.waypoint_order;
         const overview_polyline = route.overview_polyline.points;
-        const routeLegs = route.legs; // Obtenemos los tramos de la ruta
+        const routeLegs = route.legs;
 
-        const totalDurationInSeconds = routeLegs.reduce((total, leg) => total + leg.duration.value, 0);
+        // --- MODIFICADO: Se calcula la duración total usando 'duration_in_traffic' si está disponible ---
+        const totalDurationInSeconds = routeLegs.reduce((total, leg) => {
+            return total + (leg.duration_in_traffic ? leg.duration_in_traffic.value : leg.duration.value);
+        }, 0);
         const hours = Math.floor(totalDurationInSeconds / 3600);
         const minutes = Math.round((totalDurationInSeconds % 3600) / 60);
-        const totalDurationText = `${hours > 0 ? `${hours}h ` : ''}${minutes}m`;
+        const totalDurationText = `${hours > 0 ? `${hours}h ` : ''}${minutes}m (con tráfico)`;
 
         const startPoint = {
             id: 'start_location',
@@ -115,18 +122,18 @@ export const optimizeRoute = async (req, res) => {
             created_at: new Date().toISOString()
         };
         
-        // --- MODIFICADO ---
-        // Se añade la información de distancia y duración de cada tramo (leg) a los repartos.
+        // --- MODIFICADO: Se añade 'duration_in_traffic' a los datos de cada tramo ---
         const optimizedRepartos = [
             startPoint,
             ...optimizedOrder.map((repartoIndex, legIndex) => {
                 const reparto = repartosWithCoords[repartoIndex];
-                const leg = routeLegs[legIndex]; // El índice del tramo corresponde al de la parada
+                const leg = routeLegs[legIndex];
                 return {
                     ...reparto,
                     legData: {
                         distance: leg.distance.text,
-                        duration: leg.duration.text,
+                        // Se prioriza la duración con tráfico si está disponible
+                        duration: leg.duration_in_traffic ? leg.duration_in_traffic.text : leg.duration.text,
                     },
                 };
             }),

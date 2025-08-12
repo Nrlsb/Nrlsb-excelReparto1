@@ -206,7 +206,8 @@ function App() {
     setShowLocationModal(true);
   };
 
-  const startOptimization = async (startLocation = null) => {
+  // --- MODIFICADO: La función ahora acepta el modelo de tráfico ---
+  const startOptimization = async (startLocation = null, trafficModel = 'best_guess') => {
     setIsOptimizing(true);
     setShowLocationModal(false);
 
@@ -229,7 +230,8 @@ function App() {
       }
       
       toast.info('Optimizando la ruta...');
-      const { data } = await api.post('/repartos/optimize', { repartos, currentLocation });
+      // --- MODIFICADO: Se envía el modelo de tráfico al backend ---
+      const { data } = await api.post('/repartos/optimize', { repartos, currentLocation, trafficModel });
       
       setOptimizedData({ 
         repartos: data.optimizedRepartos, 
