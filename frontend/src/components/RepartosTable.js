@@ -2,17 +2,89 @@
 import React, { useState, useMemo } from 'react';
 import { toast } from 'react-toastify';
 import RepartoRow from './RepartoRow';
+import dayjs from 'dayjs';
+import customParseFormat from 'dayjs/plugin/customParseFormat';
+
+dayjs.extend(customParseFormat);
+
+// --- NUEVO: Lógica mejorada para calcular ETA y conflictos ---
+
+// Parsea una duración en texto (ej. "15 mins") a segundos
+const parseDurationToSeconds = (durationText) => {
+  if (!durationText) return 0;
+  let seconds = 0;
+  const hourMatches = durationText.match(/(\d+)\s*h/);
+  const minMatches = durationText.match(/(\d+)\s*min/);
+  if (hourMatches) seconds += parseInt(hourMatches[1], 10) * 3600;
+  if (minMatches) seconds += parseInt(minMatches[1], 10) * 60;
+  return seconds;
+};
+
+// Parsea el texto del horario a objetos dayjs
+const parseHorarios = (horarios) => {
+  if (!horarios) return null;
+  // Soporta "9-18", "9:30-18:00", "14 a 18"
+  const matches = horarios.match(/(\d{1,2}(?::\d{2})?)\s*(?:-|a)\s*(\d{1,2}(?::\d{2})?)/);
+  if (!matches) return null;
+
+  const [, start, end] = matches;
+  const startTime = dayjs(start, 'H:mm');
+  const endTime = dayjs(end, 'H:mm');
+
+  if (!startTime.isValid() || !endTime.isValid()) return null;
+  return { startTime, endTime };
+};
+
 
 function RepartosTable({ repartos, loading, onUpdateReparto, onDeleteReparto, isAdmin, isOptimizedView = false }) {
   const [sortKey, setSortKey] = useState('id');
   const [sortOrder, setSortOrder] = useState('asc');
 
+  // --- LÓGICA DE CÁLCULO DE ETA Y CONFLICTOS ---
+  const routeAnalysis = useMemo(() => {
+    if (!isOptimizedView || !repartos || repartos.length === 0) {
+      return { etas: {}, conflicts: {} };
+    }
+
+    const etas = {};
+    const conflicts = {};
+    let cumulativeTime = dayjs(); // La ruta comienza "ahora"
+
+    repartos.forEach((reparto, index) => {
+      if (index === 0) { // Punto de partida
+        etas[reparto.id] = cumulativeTime.format('HH:mm');
+        return;
+      }
+
+      const prevReparto = repartos[index - 1];
+      const legDurationSeconds = parseDurationToSeconds(prevReparto.legData?.duration);
+      
+      // Añadimos un tiempo de parada estimado (ej. 10 minutos por entrega)
+      const stopDurationSeconds = 10 * 60; 
+      cumulativeTime = cumulativeTime.add(legDurationSeconds + stopDurationSeconds, 'second');
+      
+      etas[reparto.id] = cumulativeTime.format('HH:mm');
+
+      const timeWindow = parseHorarios(reparto.horarios);
+      if (timeWindow) {
+        const { startTime, endTime } = timeWindow;
+        if (cumulativeTime.isBefore(startTime)) {
+          conflicts[reparto.id] = { hasConflict: true, message: `Llegada temprana (antes de las ${startTime.format('HH:mm')})` };
+          // Ajustamos el tiempo de espera
+          cumulativeTime = startTime;
+        } else if (cumulativeTime.isAfter(endTime)) {
+          conflicts[reparto.id] = { hasConflict: true, message: `Llegada tardía (después de las ${endTime.format('HH:mm')})` };
+        }
+      }
+    });
+
+    return { etas, conflicts };
+  }, [repartos, isOptimizedView]);
+
+
   const sortedRepartos = useMemo(() => {
     const repartosArray = Array.isArray(repartos) ? repartos : [];
-    
-    if (isOptimizedView) {
-        return repartosArray;
-    }
+    if (isOptimizedView) return repartosArray;
 
     const sorted = [...repartosArray];
     if (sortKey) {
@@ -53,7 +125,6 @@ function RepartosTable({ repartos, loading, onUpdateReparto, onDeleteReparto, is
     );
   };
 
-  // Se ajusta el colspan para la nueva columna en la vista optimizada.
   const colSpan = isAdmin 
     ? (isOptimizedView ? 8 : 7) 
     : (isOptimizedView ? 7 : 6);
@@ -68,8 +139,7 @@ function RepartosTable({ repartos, loading, onUpdateReparto, onDeleteReparto, is
             <SortableHeader columnKey="direccion">Dirección</SortableHeader>
             <SortableHeader columnKey="horarios">Horarios</SortableHeader>
             <SortableHeader columnKey="bultos">Bultos</SortableHeader>
-            {/* Se añade la cabecera para la columna del tramo */}
-            {isOptimizedView && <th className="p-4 text-left bg-gradient-to-r from-purple-600 to-indigo-600 text-white uppercase text-sm font-bold tracking-wider">Tramo</th>}
+            {isOptimizedView && <th className="p-4 text-left bg-gradient-to-r from-purple-600 to-indigo-600 text-white uppercase text-sm font-bold tracking-wider">Tramo / ETA</th>}
             {isAdmin && <SortableHeader columnKey="agregado_por">Agregado por</SortableHeader>}
             <th className="p-4 text-center bg-gradient-to-r from-purple-600 to-indigo-600 text-white uppercase text-sm font-bold tracking-wider">Acciones</th> 
           </tr>
@@ -86,6 +156,8 @@ function RepartosTable({ repartos, loading, onUpdateReparto, onDeleteReparto, is
                 onDelete={onDeleteReparto}
                 isAdmin={isAdmin}
                 orderNumber={isOptimizedView ? index + 1 : null}
+                eta={routeAnalysis.etas[reparto.id]}
+                conflictInfo={routeAnalysis.conflicts[reparto.id]}
               />
             ))
           ) : (
