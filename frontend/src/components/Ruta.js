@@ -1,6 +1,7 @@
 // src/components/Ruta.js
 import React from 'react';
-import Map from './Map';
+import dynamic from 'next/dynamic';
+const Map = dynamic(() => import('./Map'), { ssr: false });
 import RepartosTable from './RepartosTable';
 
 // --- NUEVO: Recibir y mostrar la duración total ---

@@ -1,3 +1,4 @@
+'use client';
 // src/components/Auth.js
 // --- ARCHIVO MODIFICADO para añadir campo de Nombre de Usuario ---
 import React, { useState } from 'react';

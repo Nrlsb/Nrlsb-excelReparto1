@@ -1,3 +1,4 @@
+'use client';
 // src/components/Map.js
 import React, { useEffect, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap, Tooltip } from 'react-leaflet';

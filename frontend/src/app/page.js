@@ -1,0 +1,364 @@
+'use client';
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '@/supabaseClient';
+import api from '@/services/api';
+import { ToastContainer, toast } from 'react-toastify';
+import * as XLSX from 'xlsx';
+
+import Auth from '@/components/Auth';
+import Header from '@/components/Header';
+import Account from '@/components/Account';
+import RepartoForm from '@/components/RepartoForm';
+import RepartosTable from '@/components/RepartosTable';
+import ConfirmModal from '@/components/ConfirmModal';
+import Ruta from '@/components/Ruta';
+import LocationModal from '@/components/LocationModal';
+
+export default function Home() {
+  const [session, setSession] = useState(null);
+  const [repartos, setRepartos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [userRole, setUserRole] = useState('user');
+  const [showAccountModal, setShowAccountModal] = useState(false);
+  
+  const [activeTab, setActiveTab] = useState('carga');
+  const [optimizedData, setOptimizedData] = useState(null);
+  const [isOptimizing, setIsOptimizing] = useState(false);
+  const [showLocationModal, setShowLocationModal] = useState(false);
+
+  const [confirmState, setConfirmState] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+
+  const hasElevatedPermissions = userRole === 'admin' || userRole === 'especial';
+
+  const fetchRepartos = useCallback(async () => {
+    try {
+      const { data } = await api.get('/repartos');
+      if (Array.isArray(data)) {
+        setRepartos(data);
+      } else {
+        setRepartos([]);
+        console.error("La API no devolvió un array para los repartos:", data);
+      }
+    } catch (error) {
+      toast.error("Error al cargar los repartos.");
+      setRepartos([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const setupSessionAndFetchData = async (currentSession) => {
+      setSession(currentSession);
+      if (currentSession) {
+        setLoading(true);
+        api.defaults.headers.common['Authorization'] = `Bearer ${currentSession.access_token}`;
+        
+        try {
+          const { data: profile, error } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', currentSession.user.id)
+            .single();
+
+          if (error && error.code !== 'PGRST116') {
+            throw error;
+          }
+          
+          let role = 'user';
+          if (profile) {
+            role = profile.role;
+          }
+          setUserRole(role);
+
+          if (role !== 'admin' && role !== 'especial') {
+            setActiveTab('carga');
+          }
+          
+          await fetchRepartos();
+
+        } catch (e) {
+            console.error("Error al obtener el perfil:", e);
+            setUserRole('user');
+            setActiveTab('carga');
+            await fetchRepartos();
+        }
+      } else {
+        delete api.defaults.headers.common['Authorization'];
+        setRepartos([]);
+        setUserRole('user');
+        setOptimizedData(null);
+        setActiveTab('carga');
+        setLoading(false);
+      }
+    };
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setupSessionAndFetchData(session);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setupSessionAndFetchData(session);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [fetchRepartos]);
+
+  useEffect(() => {
+    if (!session) return;
+    const channel = supabase
+      .channel('repartos_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'repartos' }, (payload) => {
+        if (payload.eventType === 'UPDATE') {
+          setRepartos(currentRepartos => 
+            currentRepartos.map(r => r.id === payload.new.id ? payload.new : r)
+          );
+          if (optimizedData) {
+            setOptimizedData(prevData => ({
+              ...prevData,
+              repartos: prevData.repartos.map(r => r.id === payload.new.id ? {...r, ...payload.new} : r)
+            }));
+          }
+        } else {
+          fetchRepartos();
+          setOptimizedData(null);
+          if (!hasElevatedPermissions) {
+            setActiveTab('carga');
+          }
+        }
+      })
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [session, fetchRepartos, hasElevatedPermissions, optimizedData]);
+
+  const handleAddReparto = async (newReparto) => {
+    try {
+      await api.post('/repartos', { ...newReparto, user_id: session.user.id });
+      toast.success('Reparto agregado.');
+    } catch (error) {
+      toast.error('No se pudo agregar el reparto.');
+    }
+  };
+
+  const handleUpdateReparto = async (id, updatedData) => {
+    if (id === 'start_location') return;
+    try {
+      await api.put(`/repartos/${id}`, updatedData);
+      toast.success(`Reparto #${id} actualizado.`);
+    } catch (error) {
+      toast.error('No se pudo actualizar el reparto.');
+    }
+  };
+
+  const handleDeleteReparto = (id) => {
+    if (id === 'start_location') return;
+    setConfirmState({
+      isOpen: true,
+      title: 'Confirmar Eliminación',
+      message: `¿Estás seguro de que quieres eliminar el reparto #${id}?`,
+      onConfirm: async () => {
+        try {
+          await api.delete(`/repartos/${id}`);
+          toast.info(`Reparto #${id} eliminado.`);
+        } catch (error) {
+          toast.error('No se pudo eliminar el reparto.');
+        }
+        closeConfirmModal();
+      },
+    });
+  };
+  
+  const handleClearRepartos = () => {
+    const message = hasElevatedPermissions ? '¿Estás seguro de que quieres eliminar TODOS los repartos?' : '¿Estás seguro de que quieres eliminar TODOS TUS repartos?';
+    setConfirmState({
+      isOpen: true,
+      title: 'Confirmar Vaciado',
+      message: message,
+      onConfirm: async () => {
+        try {
+          await api.delete('/repartos/all');
+          toast.warn('Se han eliminado los repartos.');
+        } catch (error) {
+          toast.error('No se pudieron eliminar los repartos.');
+        }
+        closeConfirmModal();
+      },
+    });
+  };
+  
+  const handleOptimizeRouteClick = () => {
+    if (repartos.length < 1) {
+      toast.info('Necesitas al menos 1 reparto para optimizar la ruta.');
+      return;
+    }
+    setShowLocationModal(true);
+  };
+
+  const startOptimization = async (startLocation = null, trafficModel = 'best_guess') => {
+    setIsOptimizing(true);
+    setShowLocationModal(false);
+
+    let currentLocation;
+
+    try {
+      if (typeof startLocation === 'string') {
+        currentLocation = startLocation;
+        toast.info(`Optimizando ruta desde: ${startLocation}`);
+      } else {
+        toast.info('Obteniendo tu ubicación actual...');
+        const position = await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0
+          });
+        });
+        currentLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
+      }
+      
+      toast.info('Optimizando la ruta...');
+      const { data } = await api.post('/repartos/optimize', { repartos, currentLocation, trafficModel });
+      
+      setOptimizedData({ 
+        repartos: data.optimizedRepartos, 
+        polyline: data.polyline,
+        totalDuration: data.totalDuration 
+      });
+      setActiveTab('ruta');
+      toast.success('Ruta optimizada con éxito.');
+    } catch (error) {
+      const errorMessage = error.response?.data?.details || error.response?.data?.error || error.message || 'No se pudo optimizar la ruta.';
+      toast.error(errorMessage, { autoClose: 5000 });
+    } finally {
+      setIsOptimizing(false);
+    }
+  };
+
+  const handleSimpleExportExcel = () => {
+    if (repartos.length === 0) return toast.info('No hay repartos para exportar.');
+    const dataToExport = repartos.map(r => ({
+      'ID': r.id, 'Destino': r.destino, 'Dirección': r.direccion,
+      'Horarios': r.horarios, 'Bultos': r.bultos,
+      ...(hasElevatedPermissions && {'Agregado por': r.agregado_por})
+    }));
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Repartos");
+    XLSX.writeFile(wb, "repartos.xlsx");
+  };
+
+  const handleTemplateExport = async () => {
+    try {
+      const response = await api.get('/repartos/export', { responseType: 'blob' });
+      const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `repartos-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      toast.error(`No se pudo exportar el archivo: ${error.message}`);
+    }
+  };
+  
+  const handleUpdateProfile = async (username) => {
+    try {
+      await api.put('/profile', { username });
+      await supabase.auth.refreshSession();
+      toast.success('Perfil actualizado.');
+      setShowAccountModal(false);
+    } catch (error) {
+      toast.error('No se pudo actualizar el perfil.');
+      console.error('Error updating profile:', error);
+    }
+  };
+
+  const closeConfirmModal = () => setConfirmState({ isOpen: false });
+
+  const TabButton = ({ tabName, label }) => {
+    const isActive = activeTab === tabName;
+    const isDisabled = tabName === 'ruta' && !optimizedData;
+    return (
+      <button
+        onClick={() => !isDisabled && setActiveTab(tabName)}
+        disabled={isDisabled}
+        className={`py-2 px-6 text-sm font-semibold rounded-t-lg transition-colors focus:outline-none ${
+          isActive ? 'bg-white text-purple-600' : 'bg-transparent text-gray-500 hover:bg-gray-200'
+        } ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+      >
+        {label}
+      </button>
+    );
+  };
+
+  return (
+    <>
+      <div className="container mx-auto p-4 sm:p-6 lg:p-8">
+        {!session ? <Auth /> : (
+          <div>
+            <Header session={session} onOpenAccountModal={() => setShowAccountModal(true)} />
+            <div className="flex border-b border-gray-300">
+              <TabButton tabName="carga" label="Carga de Repartos" />
+              {hasElevatedPermissions && <TabButton tabName="ruta" label="Visualización de Ruta" />}
+            </div>
+            <div className="pt-6">
+              {activeTab === 'carga' && (
+                <>
+                  <RepartoForm onAddReparto={handleAddReparto} session={session} />
+                  <div className="flex flex-wrap gap-4 mb-5">
+                    {hasElevatedPermissions && (
+                      <button onClick={handleOptimizeRouteClick} disabled={loading} className="px-5 py-2 border-none rounded-lg text-sm font-semibold cursor-pointer transition-transform duration-200 uppercase tracking-wider text-white bg-gradient-to-r from-cyan-500 to-blue-500 hover:scale-105 disabled:opacity-60">
+                        🗺️ Optimizar Ruta
+                      </button>
+                    )}
+                    <button onClick={handleSimpleExportExcel} className="px-5 py-2 border-none rounded-lg text-sm font-semibold cursor-pointer transition-transform duration-200 uppercase tracking-wider text-white bg-gradient-to-r from-green-500 to-teal-500 hover:scale-105">
+                      📊 Exportar a Excel
+                    </button>
+                    <button onClick={handleTemplateExport} className="px-5 py-2 border-none rounded-lg text-sm font-semibold cursor-pointer transition-transform duration-200 uppercase tracking-wider text-white bg-gradient-to-r from-blue-500 to-sky-500 hover:scale-105">
+                      📋 Exportar con Plantilla
+                    </button>
+                    <button onClick={handleClearRepartos} className="px-5 py-2 border-none rounded-lg text-sm font-semibold cursor-pointer transition-transform duration-200 uppercase tracking-wider text-white bg-gradient-to-r from-red-500 to-orange-500 hover:scale-105">
+                      🗑️ Vaciar Todo
+                    </button>
+                  </div>
+                  <RepartosTable repartos={repartos} loading={loading} onUpdateReparto={handleUpdateReparto} onDeleteReparto={handleDeleteReparto} isAdmin={hasElevatedPermissions} />
+                </>
+              )}
+              {activeTab === 'ruta' && optimizedData && hasElevatedPermissions && (
+                <Ruta 
+                  repartos={optimizedData.repartos} 
+                  polyline={optimizedData.polyline} 
+                  totalDuration={optimizedData.totalDuration}
+                  onUpdateReparto={handleUpdateReparto} 
+                  onDeleteReparto={handleDeleteReparto} 
+                  isAdmin={hasElevatedPermissions} 
+                />
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+      {showAccountModal && <Account session={session} onClose={() => setShowAccountModal(false)} onSave={handleUpdateProfile} />}
+      <ConfirmModal isOpen={confirmState.isOpen} onClose={closeConfirmModal} onConfirm={confirmState.onConfirm} title={confirmState.title}>
+        {confirmState.message}
+      </ConfirmModal>
+      <LocationModal 
+        isOpen={showLocationModal} 
+        onClose={() => setShowLocationModal(false)} 
+        onOptimize={startOptimization}
+        isOptimizing={isOptimizing}
+      />
+      <ToastContainer position="bottom-right" autoClose={3000} hideProgressBar={false} />
+    </>
+  );
+}
