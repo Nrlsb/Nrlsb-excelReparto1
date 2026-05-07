@@ -37,7 +37,7 @@ export async function POST(req) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json(data[0], { status: 21 });
+    return NextResponse.json(data[0], { status: 201 });
   } catch (error) {
     return NextResponse.json({ error: 'Cuerpo de solicitud inválido' }, { status: 400 });
   }

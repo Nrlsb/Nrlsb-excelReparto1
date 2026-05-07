@@ -6,17 +6,17 @@ export async function PUT(req, { params }) {
   const user = await getUser(req);
   if (!user) return unauthorizedResponse();
 
-  const { id } = params;
+  const { id } = await params;
   const role = await getUserRole(user.id);
 
   if (role !== 'admin' && role !== 'especial') {
-    const { data: existing } = await supabaseAdmin
+    const { data: existing, error: fetchError } = await supabaseAdmin
       .from('repartos')
       .select('user_id')
       .eq('id', id)
       .single();
 
-    if (!existing || existing.user_id !== user.id) {
+    if (fetchError || !existing || existing.user_id !== user.id) {
       return NextResponse.json({ error: 'No tienes permiso para modificar este reparto.' }, { status: 403 });
     }
   }
@@ -42,17 +42,17 @@ export async function DELETE(req, { params }) {
   const user = await getUser(req);
   if (!user) return unauthorizedResponse();
 
-  const { id } = params;
+  const { id } = await params;
   const role = await getUserRole(user.id);
 
   if (role !== 'admin' && role !== 'especial') {
-    const { data: existing } = await supabaseAdmin
+    const { data: existing, error: fetchError } = await supabaseAdmin
       .from('repartos')
       .select('user_id')
       .eq('id', id)
       .single();
 
-    if (!existing || existing.user_id !== user.id) {
+    if (fetchError || !existing || existing.user_id !== user.id) {
       return NextResponse.json({ error: 'No tienes permiso para eliminar este reparto.' }, { status: 403 });
     }
   }
